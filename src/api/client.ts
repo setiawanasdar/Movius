@@ -405,11 +405,11 @@ function resolveFallback<T>(
           url: `https://tv.nontondrama.vip/${seriesSlugClean}`,
         },
         streaming: {
-          defaultStreamUrl: 'https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA',
+          defaultStreamUrl: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`,
           servers: [
-            { server: 'HLS VIP (Sub Indo)', url: 'https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA', isActive: true },
-            { server: 'CAST Fast', url: 'https://videonode.de/iframe3/cast/o4MVEsM7DbAAjqEC_wYpmw', isActive: false },
-            { server: 'HYDRAX Mirror', url: 'https://videonode.de/iframe3/hydrax/k99IQCf5mJh9w3o-rYAlkg', isActive: false },
+            { server: 'HLS VIP (Sub Indo)', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`, isActive: true },
+            { server: 'CAST Fast', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=cast`, isActive: false },
+            { server: 'HYDRAX Mirror', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=hydrax`, isActive: false },
             { server: 'MultiEmbed HD', url: `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}&s=${currentSeason}&e=${currentEp}`, isActive: false },
           ],
         },

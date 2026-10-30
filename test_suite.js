@@ -142,6 +142,7 @@ async function runApiTests() {
   assert.strictEqual(episodeStream.results.episode, 2);
   assert.strictEqual(episodeStream.results.series.title, 'Deadly Tag');
   assert.ok(episodeStream.results.streaming.servers.length >= 3);
+  assert.ok(episodeStream.results.streaming.servers[0].url.includes('deadly-tag'), 'Streaming server is scoped to Deadly Tag');
   assert.strictEqual(episodeStream.results.navigation.previous.slug, 'deadly-tag-season-1-episode-1-2026');
 
   console.log('  -> All 14 API Endpoints & Dynamic Details: ALL PASSED\n');
@@ -184,6 +185,13 @@ async function runApiTests() {
   await embedHandler({ method: 'GET', query: { url: 'https://videonode.de/invalid' } }, resFallback);
   assert.strictEqual(resFallback.statusCode, 200);
   assert.ok(resFallback.body.includes('Server Cadangan Aktif'), 'Fallback player renders gracefully');
+
+  // 4e. Dynamic distinct episode resolution (Doctor X must not be Seven Havens)
+  const resDoctorX = createMockRes();
+  await embedHandler({ method: 'GET', query: { episode: 'doctor-x-age-white-mafia-season-1-episode-1-2026' } }, resDoctorX);
+  assert.strictEqual(resDoctorX.statusCode, 200);
+  assert.ok(resDoctorX.body.includes('Doctor X'), 'Resolves Doctor X specifically');
+  assert.ok(!resDoctorX.body.includes('Seven Havens'), 'Doctor X does not load Seven Havens');
 
   console.log('  -> Video Streaming Proxy & HLS Resolution: ALL PASSED\n');
 

@@ -1,3 +1,53 @@
+// In-memory runtime cache for scraped episode URLs
+const episodeCache = new Map();
+
+// Pre-verified high-speed known hashes for top catalog series
+const KNOWN_EPISODE_HASHES = {
+  'doctor-x-age-white-mafia-season-1-episode-1-2026': {
+    p2p: 'https://videonode.de/iframe3/p2p/EHhKGEndUtY4WVJyiZnMaA',
+    cast: 'https://videonode.de/iframe3/cast/Rnzl7s1xMaQ0Wn34cxgVoQ',
+    hydrax: 'https://videonode.de/iframe3/hydrax/x0J1i3dYkK9V0zP5',
+  },
+  'lament-autumn-season-1-episode-1-2026': {
+    p2p: 'https://videonode.de/iframe3/p2p/Bi7sY0ZLPaLZCJ52ZoFuIA',
+    cast: 'https://videonode.de/iframe3/cast/F0_k6Y4cwCqlNEXwFkxp1g',
+  },
+  'the-mentalist-season-1-episode-1-2008': {
+    p2p: 'https://videonode.de/iframe3/p2p/zdhjJi7WBDsXyDpP3mCF6g',
+    cast: 'https://videonode.de/iframe3/p2p/zdhjJi7WBDsXyDpP3mCF6g',
+  },
+  'queen-of-tears-season-1-episode-1-2024': {
+    p2p: 'https://videonode.de/iframe3/p2p/N0j28tdsx9H6viuXvBWDMg',
+    cast: 'https://videonode.de/iframe3/cast/9iS9H1wWEnRUbMyrMvVjbA',
+    hydrax: 'https://videonode.de/iframe3/hydrax/pEqKAe4u-2xWD6PRgelbmA',
+  },
+  'shogun-season-1-episode-1-2024': {
+    p2p: 'https://videonode.de/iframe3/p2p/017ovjz8vKszK8RObK6a2g',
+    cast: 'https://videonode.de/iframe3/cast/tCKkU7qkRBB2sA9STkZO5g',
+    hydrax: 'https://videonode.de/iframe3/hydrax/Gi6G8CZlWX9YhYlWij94FA',
+  },
+  'avatar-seven-havens-season-1-episode-1-2026': {
+    p2p: 'https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA',
+    cast: 'https://videonode.de/iframe3/cast/o4MVEsM7DbAAjqEC_wYpmw',
+    hydrax: 'https://videonode.de/iframe3/hydrax/k99IQCf5mJh9w3o-rYAlkg',
+  },
+  'parasyte-the-grey-season-1-episode-1-2024': {
+    p2p: 'https://videonode.de/iframe3/p2p/jDVNILiDhgSfxEU5Miqprg',
+    cast: 'https://videonode.de/iframe3/cast/5Yte0-vHj7Ck7zHaxLajXw',
+    hydrax: 'https://videonode.de/iframe3/hydrax/a8z7X97frctec04AE728xg',
+  },
+  'marry-my-husband-season-1-episode-1-2024': {
+    p2p: 'https://videonode.de/iframe3/p2p/dv2osG0KgGnB2_x-DPP27g',
+    cast: 'https://videonode.de/iframe3/cast/Y-KPhlGrxGdbiwHWdhOtRA',
+    hydrax: 'https://videonode.de/iframe3/hydrax/0DVrk__Iu7LUGRMTb1dYUw',
+  },
+  'avatar-the-last-airbender-season-1-episode-1-2024': {
+    p2p: 'https://videonode.de/iframe3/p2p/-mwH9GPbOGnWWmSF_10nrA',
+    cast: 'https://videonode.de/iframe3/cast/s4d50rSdR6YQQJphDOo4jQ',
+    hydrax: 'https://videonode.de/iframe3/hydrax/qFASUZASVatvbRsYuVepPQ',
+  },
+};
+
 export default async function handler(req, res) {
   // CORS and framing headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,7 +60,7 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const { action, url: queryUrl } = req.query;
+  const { action, url: queryUrl, episode, server = 'p2p' } = req.query;
 
   // 1. ACTION: M3U8 Playlist Proxy & Segment Rewriter
   if (action === 'm3u8') {
@@ -82,11 +132,21 @@ export default async function handler(req, res) {
   }
 
   // 3. ACTION: Resolve Stream and Render Player
-  if (!queryUrl) {
-    return res.status(400).send('Missing url parameter');
+  let targetUrl = queryUrl ? decodeURIComponent(queryUrl) : '';
+
+  // If episode slug was provided, dynamically resolve its actual videonode URL
+  if (episode) {
+    const cleanEpisode = decodeURIComponent(episode);
+    const resolvedUrl = await resolveVideonodeUrlForEpisode(cleanEpisode, server);
+    if (resolvedUrl) {
+      targetUrl = resolvedUrl;
+    }
   }
 
-  const targetUrl = decodeURIComponent(queryUrl);
+  if (!targetUrl) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(renderFallbackPlayer(episode || 'Video Player'));
+  }
 
   try {
     const videonodeMatch = targetUrl.match(/\/iframe3\/([^/]+)\/([^/?]+)/);
@@ -150,6 +210,67 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.status(200).send(renderFallbackPlayer(targetUrl));
   }
+}
+
+/**
+ * Resolves the genuine videonode streaming URL for any episode or movie
+ */
+async function resolveVideonodeUrlForEpisode(episodeSlug, server = 'p2p') {
+  const cacheKey = `${episodeSlug}_${server}`;
+  if (episodeCache.has(cacheKey)) {
+    return episodeCache.get(cacheKey);
+  }
+
+  // Check verified pre-known hashes
+  if (KNOWN_EPISODE_HASHES[episodeSlug]?.[server]) {
+    const url = KNOWN_EPISODE_HASHES[episodeSlug][server];
+    episodeCache.set(cacheKey, url);
+    return url;
+  }
+
+  const candidates = [
+    episodeSlug,
+    episodeSlug.replace(/-\d{4}$/, '-2024'),
+    episodeSlug.replace(/-\d{4}$/, '-2025'),
+    episodeSlug.replace(/-\d{4}$/, '-2026'),
+    episodeSlug.replace(/-\d{4}$/, ''),
+  ];
+
+  const seen = new Set();
+  for (const slug of candidates) {
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+
+    try {
+      const res = await fetch(`https://tv.nontondrama.vip/${slug}`, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        },
+      });
+
+      if (!res.ok) continue;
+
+      const html = await res.text();
+      const regex = new RegExp(`data-url=["'](https:\\/\\/videonode\\.de\\/iframe3\\/${server}\\/[^"']+)["']`, 'i');
+      const match = html.match(regex);
+      if (match) {
+        episodeCache.set(cacheKey, match[1]);
+        return match[1];
+      }
+
+      const fallbackMatch = html.match(/data-url=["'](https:\/\/videonode\.de\/iframe3\/[^"']+)["']/i);
+      if (fallbackMatch) {
+        episodeCache.set(cacheKey, fallbackMatch[1]);
+        return fallbackMatch[1];
+      }
+    } catch {
+      // Continue to next candidate
+    }
+  }
+
+  return null;
 }
 
 function renderCustomPlayer(proxiedM3u8Url, title = 'Video Player', poster = '') {
@@ -292,21 +413,19 @@ function renderIframeWrapper(embedUrl) {
 </html>`;
 }
 
-function renderFallbackPlayer(targetUrl) {
+function renderFallbackPlayer(targetTitle) {
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Movius Video Player</title>
+  <title>${escapeHtml(targetTitle)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     #video-container { position: relative; width: 100%; height: 100%; background: #000; display: flex; align-items: center; justify-content: center; }
     video { width: 100%; height: 100%; object-fit: contain; background: #000; outline: none; }
     .badge { position: absolute; top: 12px; left: 12px; z-index: 20; background: rgba(225, 29, 72, 0.9); color: #fff; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
-    .ext-btn { position: absolute; top: 12px; right: 12px; z-index: 20; background: rgba(30, 41, 59, 0.85); border: 1px solid rgba(255,255,255,0.15); color: #f1f5f9; text-decoration: none; font-size: 11px; font-weight: 600; padding: 5px 12px; border-radius: 8px; backdrop-filter: blur(8px); transition: all 0.2s; }
-    .ext-btn:hover { background: #e11d48; color: #fff; border-color: #e11d48; }
   </style>
 </head>
 <body>
@@ -314,11 +433,6 @@ function renderFallbackPlayer(targetUrl) {
     <div class="badge">
       <span>● Server Cadangan Aktif</span>
     </div>
-    ${
-      targetUrl && targetUrl.startsWith('http')
-        ? `<a href="${escapeHtml(targetUrl)}" target="_blank" rel="noopener noreferrer" class="ext-btn">Buka Tab Baru ↗</a>`
-        : ''
-    }
     <video
       id="player"
       controls

@@ -132,6 +132,9 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   // Convert protected videonode.de or playcdn.de embed URLs to our Vercel serverless proxy
   const getPlayerEmbedSrc = (url: string) => {
     if (!url) return '';
+    if (url.startsWith('/api/embed')) {
+      return url;
+    }
     if (url.includes('videonode.de') || url.includes('playcdn.de')) {
       return `/api/embed?url=${encodeURIComponent(url)}`;
     }
