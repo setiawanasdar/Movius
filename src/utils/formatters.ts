@@ -41,5 +41,9 @@ export function getPosterUrl(url?: string | null): string {
   if (!url || typeof url !== 'string' || url.trim() === '') {
     return DEFAULT_POSTER_FALLBACK;
   }
-  return url;
+  let cleanUrl = url.trim();
+  if (cleanUrl.startsWith('http://')) {
+    cleanUrl = cleanUrl.replace('http://', 'https://');
+  }
+  return cleanUrl;
 }
