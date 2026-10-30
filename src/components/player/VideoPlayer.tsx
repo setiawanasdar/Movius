@@ -9,7 +9,9 @@ import {
   ShieldCheck,
   Tv,
   Check,
-  AlertCircle
+  AlertCircle,
+  ExternalLink,
+  Sparkles
 } from 'lucide-react';
 import type { EpisodeStream } from '../../types/movie';
 import { useHistoryStore } from '../../stores/useHistoryStore';
@@ -64,7 +66,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const timer = setInterval(() => {
       elapsedSecondsRef.current += 15;
       const nextTime = elapsedSecondsRef.current;
-      // Estimated standard duration 45 mins (2700s) if unknown
       const estimatedDuration = 2700;
 
       saveProgress({
@@ -107,6 +108,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     } else {
       navigate(`/watch/${epSlug}?series=${seriesSlug}`);
     }
+  };
+
+  // Convert protected videonode.de or playcdn.de embed URLs to our Vercel serverless proxy
+  const getPlayerEmbedSrc = (url: string) => {
+    if (!url) return '';
+    if (url.includes('videonode.de') || url.includes('playcdn.de')) {
+      return `/api/embed?url=${encodeURIComponent(url)}`;
+    }
+    return url;
   };
 
   return (
@@ -152,7 +162,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         {activeServerUrl ? (
           <iframe
             ref={iframeRef}
-            src={activeServerUrl}
+            src={getPlayerEmbedSrc(activeServerUrl)}
             title={streamData.title}
             className="w-full h-full border-0 absolute inset-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
@@ -245,9 +255,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
 
           {/* Quick utility toggles */}
-          <div className="flex items-center gap-3 ml-auto text-xs text-slate-400">
+          <div className="flex items-center gap-2.5 ml-auto text-xs text-slate-400">
+            {/* Open in New Tab Button */}
+            <a
+              href={activeServerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Buka Video di Tab Baru (External Player)"
+              className="p-1.5 px-2.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline font-medium">Buka di Tab Baru</span>
+            </a>
+
             {/* Autoplay next toggle */}
-            <label className="flex items-center gap-2 cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={autoPlayNext}
@@ -283,6 +305,14 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Helpful Streaming Tips Banner */}
+      <div className="px-4 py-2 bg-slate-950/80 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 gap-2">
+        <span className="flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+          <span>Tips: Pemutar video telah diproteksi dari iklan pop-up dan pemblokiran koneksi. Jika server buffering, ganti pilihan server (P2P / CAST / HYDRAX) atau klik <strong>Buka di Tab Baru</strong>.</span>
+        </span>
       </div>
     </div>
   );
