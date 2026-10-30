@@ -2312,21 +2312,26 @@ export const FALLBACK_DATA = {
       },
       "streaming": {
         "defaultStreamUrl": "https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA",
-        "totalServers": 3,
+        "totalServers": 4,
         "servers": [
           {
-            "server": "P2P",
+            "server": "HLS VIP (Sub Indo)",
             "url": "https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA",
             "isActive": true
           },
           {
-            "server": "CAST",
+            "server": "CAST Fast",
             "url": "https://videonode.de/iframe3/cast/o4MVEsM7DbAAjqEC_wYpmw",
             "isActive": false
           },
           {
-            "server": "HYDRAX",
+            "server": "HYDRAX Mirror",
             "url": "https://videonode.de/iframe3/hydrax/k99IQCf5mJh9w3o-rYAlkg",
+            "isActive": false
+          },
+          {
+            "server": "MultiEmbed HD",
+            "url": "https://multiembed.mov/?video_id=avatar-seven-havens-2026&s=1&e=1",
             "isActive": false
           }
         ]

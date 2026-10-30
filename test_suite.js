@@ -145,6 +145,48 @@ async function runApiTests() {
   assert.strictEqual(episodeStream.results.navigation.previous.slug, 'deadly-tag-season-1-episode-1-2026');
 
   console.log('  -> All 14 API Endpoints & Dynamic Details: ALL PASSED\n');
+
+  // 4. Test Video Streaming Proxy Handler (embed.js)
+  console.log('[TEST 4] Testing Video Streaming Proxy & HLS Resolution...');
+  const { default: embedHandler } = await import('./api/embed.js');
+  
+  function createMockRes() {
+    return {
+      headers: {},
+      statusCode: 200,
+      setHeader(k, v) { this.headers[k] = v; },
+      status(s) { this.statusCode = s; return this; },
+      send(b) { this.body = b; return this; }
+    };
+  }
+
+  // 4a. P2P host resolution into Custom Player with proxied m3u8
+  const resP2P = createMockRes();
+  await embedHandler({ method: 'GET', query: { url: 'https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA' } }, resP2P);
+  assert.strictEqual(resP2P.statusCode, 200);
+  assert.ok(resP2P.body.includes('action=m3u8'), 'P2P player contains proxied m3u8 action');
+  assert.ok(resP2P.body.includes('Hls.isSupported()'), 'P2P player contains Hls.js initialization');
+
+  // 4b. CAST host resolution into clean Iframe wrapper
+  const resCast = createMockRes();
+  await embedHandler({ method: 'GET', query: { url: 'https://videonode.de/iframe3/cast/o4MVEsM7DbAAjqEC_wYpmw' } }, resCast);
+  assert.strictEqual(resCast.statusCode, 200);
+  assert.ok(resCast.body.includes('mfw09.org'), 'CAST resolves to clean embed url without CSP');
+
+  // 4c. M3U8 proxy & segment URL rewriter
+  const resM3u8 = createMockRes();
+  await embedHandler({ method: 'GET', query: { action: 'm3u8', url: 'https://stream.playcdn.de/playlist/897ca92d9f320b964ab3c52faa85d442/1/0.m3u8?x=1' } }, resM3u8);
+  assert.strictEqual(resM3u8.statusCode, 200);
+  assert.ok(resM3u8.body.includes('/api/embed?action=segment'), 'M3u8 playlist lines rewritten to proxy segments');
+
+  // 4d. Fallback on invalid stream URL
+  const resFallback = createMockRes();
+  await embedHandler({ method: 'GET', query: { url: 'https://videonode.de/invalid' } }, resFallback);
+  assert.strictEqual(resFallback.statusCode, 200);
+  assert.ok(resFallback.body.includes('Server Cadangan Aktif'), 'Fallback player renders gracefully');
+
+  console.log('  -> Video Streaming Proxy & HLS Resolution: ALL PASSED\n');
+
   console.log('====================================================');
   console.log('   ALL MOVIUS SUITE TESTS PASSED SUCCESSFULLY! (100%)');
   console.log('====================================================');

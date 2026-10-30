@@ -41,9 +41,28 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   const [activeServerUrl, setActiveServerUrl] = useState<string>(defaultUrl);
   const [isTheaterMode, setIsTheaterMode] = useState(false);
+  const [isIframeLoading, setIsIframeLoading] = useState(true);
+  const [loadSlowWarning, setLoadSlowWarning] = useState(false);
   const [autoPlayNext, setAutoPlayNext] = useState<boolean>(() => {
     return localStorage.getItem('cinestream_autoplay') !== 'false';
   });
+
+  // Watchdog timer: If iframe is still loading after 7s, prompt server switch
+  useEffect(() => {
+    setIsIframeLoading(true);
+    setLoadSlowWarning(false);
+
+    const timer = setTimeout(() => {
+      setIsIframeLoading((current) => {
+        if (current) {
+          setLoadSlowWarning(true);
+        }
+        return current;
+      });
+    }, 7000);
+
+    return () => clearTimeout(timer);
+  }, [activeServerUrl, streamData.slug]);
 
   // Resume prompt state
   const previousProgress = getProgressForSeries(seriesSlug);
@@ -167,6 +186,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             className="w-full h-full border-0 absolute inset-0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
             allowFullScreen
+            onLoad={() => {
+              setIsIframeLoading(false);
+              setLoadSlowWarning(false);
+            }}
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-center p-6 text-slate-400">
@@ -176,6 +199,38 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           </div>
         )}
       </div>
+
+      {/* Buffering helper banner */}
+      {loadSlowWarning && isIframeLoading && (
+        <div className="bg-slate-900 border-b border-rose-500/30 px-4 py-2 flex items-center justify-between gap-3 text-xs text-slate-300 z-20 animate-in fade-in">
+          <div className="flex items-center gap-2 text-rose-400 font-medium">
+            <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+            <span>Server memerlukan waktu lebih lama? Coba server alternatif atau buka di tab baru.</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {servers.length > 1 && (
+              <button
+                onClick={() => {
+                  const currentIndex = servers.findIndex((s) => s.url === activeServerUrl);
+                  const nextIndex = (currentIndex + 1) % servers.length;
+                  if (servers[nextIndex]) {
+                    setActiveServerUrl(servers[nextIndex].url);
+                  }
+                }}
+                className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs cursor-pointer"
+              >
+                Ganti Server
+              </button>
+            )}
+            <button
+              onClick={() => setLoadSlowWarning(false)}
+              className="text-slate-400 hover:text-white px-2 py-1 text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Player Controls & Server Switcher Bar */}
       <div className="p-3 md:p-4 bg-slate-900/95 border-t border-slate-800 flex flex-col gap-3">
@@ -258,10 +313,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <div className="flex items-center gap-2.5 ml-auto text-xs text-slate-400">
             {/* Open in New Tab Button */}
             <a
-              href={activeServerUrl}
+              href={getPlayerEmbedSrc(activeServerUrl)}
               target="_blank"
               rel="noopener noreferrer"
-              title="Buka Video di Tab Baru (External Player)"
+              title="Buka Video di Tab Baru (Clean Player)"
               className="p-1.5 px-2.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
             >
               <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
