@@ -125,7 +125,7 @@ export const WatchPage: React.FC = () => {
                 {streamData.series?.title || streamData.title}
               </h2>
               {streamData.series?.rating && (
-                <RatingBadge rating={streamData.series.rating} size="sm" />
+                <RatingBadge rating={streamData.series.rating} size="sm" hasImdb={Boolean(streamData.series?.imdbId)} />
               )}
             </div>
 

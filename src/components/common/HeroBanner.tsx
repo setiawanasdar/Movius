@@ -71,14 +71,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
       <div className="absolute inset-0 bg-gradient-to-r from-[#090a0f] via-[#090a0f]/90 to-transparent z-10" />
 
       {/* Main Content Area */}
-      <div className="relative z-20 h-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col justify-end pb-12 md:pb-16">
+      <div className="relative z-20 h-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col justify-end pt-24 sm:pt-28 md:pt-32 pb-10 md:pb-14">
         <div className="max-w-2xl flex flex-col gap-3.5 animate-in fade-in duration-500">
           {/* Metadata badges */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="px-2.5 py-0.5 rounded-full bg-rose-600/90 text-white font-bold tracking-wide uppercase text-[10px]">
               {current.isComplete ? 'TAMAT' : 'ONGOING'}
             </span>
-            {current.rating && <RatingBadge rating={current.rating} size="md" />}
+            {current.rating && <RatingBadge rating={current.rating} size="md" hasImdb={Boolean(current.imdbId)} />}
             {current.year && (
               <span className="text-slate-300 font-medium px-2 py-0.5 rounded bg-white/10 backdrop-blur-md">
                 {current.year}
@@ -92,7 +92,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight drop-shadow-md">
+          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight line-clamp-2 sm:line-clamp-3 drop-shadow-lg max-h-[140px] overflow-hidden">
             {current.title}
           </h1>
 
@@ -107,7 +107,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
 
           {/* Description */}
           <p className="text-xs sm:text-sm md:text-base text-slate-300/90 line-clamp-3 leading-relaxed max-w-xl">
-            {current.synopsis || `Tonton ${current.title} dengan subtitle Bahasa Indonesia berkualitas tinggi, bagian dari koleksi 4.427+ judul film & serial di Movius.`}
+            {current.synopsis || (
+              current.genres?.length
+                ? `Saksikan tayangan ${current.title} (${current.year || '2026'}) dengan genre ${current.genres.join(', ')}. Nikmati streaming Full HD lengkap dengan terjemahan subtitle Bahasa Indonesia resmi.`
+                : `Saksikan tayangan sinematik ${current.title} (${current.year || '2026'}) lengkap dengan subtitle Bahasa Indonesia berkualitas tinggi.`
+            )}
           </p>
 
           {/* Action Buttons */}

@@ -1,10 +1,14 @@
 export function formatRating(rating: number | null | undefined): string {
-  if (rating === null || rating === undefined || isNaN(rating) || rating === 0) {
+  if (rating === null || rating === undefined || isNaN(rating) || rating <= 0) {
     return 'N/A';
   }
-  let val = rating;
+  let val = Number(rating);
   if (val > 10 && val <= 100) {
     val = val / 10;
+  }
+  // 10.0 or >= 9.8 is LK21 default placeholder for unrated/new titles
+  if (val >= 9.8) {
+    return 'N/A';
   }
   return val.toFixed(1);
 }

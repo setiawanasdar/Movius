@@ -56,6 +56,40 @@ export const DetailPage: React.FC = () => {
         setSelectedSeason(data.seasons[0].season);
       }
 
+      // Live on-demand IMDb enrichment for missing poster, synopsis, director, or cast
+      fetch(`/api/imdb?slug=${encodeURIComponent(slug)}&query=${encodeURIComponent(data.title)}&year=${data.year || ''}`)
+        .then((r) => r.json())
+        .then((json) => {
+          if (json.success && json.results) {
+            const meta = json.results;
+            setSeries((prev) => {
+              if (!prev) return prev;
+              const metaRating = Number(meta.rating);
+              const cleanRating = metaRating > 0 && metaRating < 9.8 ? metaRating : prev.rating;
+              return {
+                ...prev,
+                title: meta.title || prev.title,
+                poster:
+                  meta.poster && meta.poster.includes('amazon.com')
+                    ? meta.poster
+                    : prev.poster || meta.poster,
+                backdrop: meta.backdrop || prev.backdrop,
+                synopsis: meta.synopsis || prev.synopsis,
+                rating: cleanRating,
+                imdbRating: cleanRating,
+                imdbId: meta.imdbId || prev.imdbId,
+                metadata: {
+                  ...prev.metadata,
+                  director: meta.director || prev.metadata?.director,
+                  cast: meta.cast?.length ? meta.cast : prev.metadata?.cast,
+                  genres: meta.genres?.length ? meta.genres : prev.metadata?.genres,
+                },
+              };
+            });
+          }
+        })
+        .catch(() => {});
+
       // Load related items based on first genre or popular
       movieApi
         .getPopular(1)
@@ -92,6 +126,38 @@ export const DetailPage: React.FC = () => {
     series.metadata?.totalEpisodes === 1 ||
     (!series.metadata?.totalEpisodes && (!series.seasons || series.seasons.length <= 1) && series.seasons?.[0]?.episodes?.length === 1)
   );
+
+  const isDrakor = Boolean(
+    series.metadata?.genres?.some((g) => ['drakor', 'drama korea'].includes(g.toLowerCase())) ||
+    series.slug.includes('drakor')
+  );
+
+  const validCountry =
+    isDrakor
+      ? 'Korea Selatan'
+      : series.metadata?.country && !['korea selatan', 'unknown'].includes(series.metadata.country.toLowerCase())
+      ? series.metadata.country
+      : null;
+
+  const validDirector =
+    series.metadata?.director &&
+    !['sutradara pilihan', 'sutradara', 'pilihan', 'unknown', '-'].includes(series.metadata.director.toLowerCase())
+      ? series.metadata.director
+      : null;
+
+  const validCast = (series.metadata?.cast || []).filter(
+    (c) => !['pemeran utama', 'bintang film', 'bintang tamu', 'unknown'].includes(c.toLowerCase())
+  );
+
+  const cleanRating =
+    series.rating && Number(series.rating) > 0 && Number(series.rating) < 9.8
+      ? Number(series.rating)
+      : null;
+
+  const cleanSynopsis =
+    series.synopsis && !series.synopsis.includes('menyajikan tayangan sinematik lengkap')
+      ? series.synopsis
+      : 'Sinopsis resmi belum tersedia untuk judul ini. Anda dapat langsung menonton tayangan beresolusi Full HD ini lengkap dengan subtitle Bahasa Indonesia.';
 
   const currentSeasonData =
     series.seasons?.find((s) => s.season === selectedSeason) || series.seasons?.[0];
@@ -147,17 +213,17 @@ export const DetailPage: React.FC = () => {
               <span className="px-3 py-1 rounded-full bg-rose-600 font-bold text-white uppercase text-[10px] tracking-wider">
                 {isMovie ? 'FILM BIOSKOP' : (series.metadata?.status || 'SERIAL TV')}
               </span>
-              {series.rating && <RatingBadge rating={series.rating} size="md" />}
+              {cleanRating && <RatingBadge rating={cleanRating} size="md" hasImdb={Boolean(series.imdbId)} />}
               {series.year && (
                 <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white/10 text-slate-200">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
                   {series.year}
                 </span>
               )}
-              {series.metadata?.country && (
+              {validCountry && (
                 <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white/10 text-slate-200">
                   <Globe className="w-3.5 h-3.5 text-slate-400" />
-                  {series.metadata.country}
+                  {validCountry}
                 </span>
               )}
               {isMovie ? (
@@ -242,30 +308,32 @@ export const DetailPage: React.FC = () => {
             </div>
 
             {/* Cast & Director Metadata */}
-            <div className="flex flex-col gap-2 pt-2 text-xs md:text-sm text-slate-300 border-t border-white/10 mt-2">
-              {series.metadata?.director && (
-                <div className="flex items-center gap-2">
-                  <User className="w-4 h-4 text-slate-400 shrink-0" />
-                  <span className="text-slate-400">Sutradara:</span>
-                  <span className="font-semibold text-white">{series.metadata.director}</span>
-                </div>
-              )}
-
-              {series.metadata?.cast && series.metadata.cast.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="text-slate-400 shrink-0">Pemeran:</span>
-                  <div className="flex flex-wrap gap-1 text-slate-200">
-                    {series.metadata.cast.map((c, i) => (
-                      <span key={i}>
-                        {c}
-                        {i < (series.metadata.cast?.length ?? 0) - 1 ? ',' : ''}
-                      </span>
-                    ))}
+            {(validDirector || validCast.length > 0) && (
+              <div className="flex flex-col gap-2 pt-2 text-xs md:text-sm text-slate-300 border-t border-white/10 mt-2">
+                {validDirector && (
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-slate-400 shrink-0" />
+                    <span className="text-slate-400">Sutradara:</span>
+                    <span className="font-semibold text-white">{validDirector}</span>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+
+                {validCast.length > 0 && (
+                  <div className="flex items-start gap-2">
+                    <Users className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+                    <span className="text-slate-400 shrink-0">Pemeran:</span>
+                    <div className="flex flex-wrap gap-1 text-slate-200">
+                      {validCast.map((c, i) => (
+                        <span key={i}>
+                          {c}
+                          {i < validCast.length - 1 ? ',' : ''}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -273,17 +341,15 @@ export const DetailPage: React.FC = () => {
       {/* Main Content Area */}
       <div className="max-w-7xl mx-auto px-4 md:px-8 w-full flex flex-col gap-8 mt-4">
         {/* Synopsis Section */}
-        {series.synopsis && (
-          <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80">
-            <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-              <span className="w-1.5 h-4 bg-rose-600 rounded-full inline-block" />
-              Sinopsis Cerita
-            </h3>
-            <p className="text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-line">
-              {series.synopsis}
-            </p>
-          </div>
-        )}
+        <div className="p-6 rounded-2xl bg-slate-900/50 border border-slate-800/80">
+          <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-4 bg-rose-600 rounded-full inline-block" />
+            Sinopsis Cerita
+          </h3>
+          <p className="text-slate-300 text-sm md:text-base leading-relaxed whitespace-pre-line">
+            {cleanSynopsis}
+          </p>
+        </div>
 
         {/* Season & Episode List Section or Full Movie Cinema Card */}
         {isMovie ? (

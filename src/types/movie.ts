@@ -17,6 +17,9 @@ export interface CatalogItem {
   imdbRating?: number | string | null;
   synopsis?: string;
   backdrop?: string;
+  director?: string;
+  cast?: string[];
+  country?: string;
 }
 
 export interface CatalogResponse {
@@ -55,10 +58,10 @@ export interface SeriesDetail {
   imdbId?: string;
   imdbRating?: number | string | null;
   metadata: {
-    director: string;
-    cast: string[];
+    director?: string;
+    cast?: string[];
     genres: string[];
-    country: string;
+    country?: string;
     totalSeasons: number;
     totalEpisodes: number;
     status: string;
@@ -88,6 +91,8 @@ export interface EpisodeStream {
     year: number | null;
     isMovie?: boolean;
     url?: string;
+    imdbId?: string;
+    imdbRating?: number | string | null;
   };
   streaming: {
     defaultStreamUrl: string;

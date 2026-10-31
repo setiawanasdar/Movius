@@ -4,7 +4,7 @@ import { Play, Bookmark, BookmarkCheck, CheckCircle2 } from 'lucide-react';
 import type { CatalogItem } from '../../types/movie';
 import { RatingBadge } from './RatingBadge';
 import { useWatchlistStore } from '../../stores/useWatchlistStore';
-import { getPosterUrl, DEFAULT_POSTER_FALLBACK } from '../../utils/formatters';
+import { getPosterUrl, DEFAULT_POSTER_FALLBACK, formatRating } from '../../utils/formatters';
 import { cn } from '../../utils/cn';
 
 interface MovieCardProps {
@@ -72,9 +72,13 @@ export const MovieCard: React.FC<MovieCardProps> = ({
 
           {/* Top Badges */}
           <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-1 pointer-events-none z-10">
-            {movie.rating ? (
-              <RatingBadge rating={movie.rating} size="sm" />
-            ) : <span />}
+            {movie.rating && formatRating(movie.rating) !== 'N/A' ? (
+              <RatingBadge rating={movie.rating} size="sm" hasImdb={Boolean(movie.imdbId)} />
+            ) : (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-slate-900/90 text-slate-200 border border-slate-700/60 backdrop-blur-md">
+                Baru
+              </span>
+            )}
 
             {movie.isComplete ? (
               <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-emerald-500/90 text-white backdrop-blur-md shadow-sm">

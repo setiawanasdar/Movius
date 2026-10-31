@@ -8,6 +8,7 @@ interface RatingBadgeProps {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   showIcon?: boolean;
+  hasImdb?: boolean;
 }
 
 export const RatingBadge: React.FC<RatingBadgeProps> = ({
@@ -15,6 +16,7 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({
   size = 'md',
   className,
   showIcon = true,
+  hasImdb = false,
 }) => {
   const formatted = formatRating(rating);
   const isAvailable = formatted !== 'N/A';
@@ -31,18 +33,22 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({
     lg: 'text-xs px-1.5 rounded',
   };
 
+  if (!isAvailable) {
+    return null;
+  }
+
   return (
     <div
       className={cn(
         'inline-flex items-center font-bold rounded-md backdrop-blur-md shadow-sm select-none',
-        isAvailable
+        hasImdb
           ? 'bg-amber-400 text-slate-950 border border-amber-300'
-          : 'bg-slate-800/80 text-slate-400 border border-slate-700/40',
+          : 'bg-amber-500/15 text-amber-300 border border-amber-500/30',
         sizeClasses[size],
         className
       )}
     >
-      {isAvailable ? (
+      {hasImdb ? (
         <>
           <span className={cn('bg-slate-950 text-amber-400 font-black tracking-tight', imdbLabelSizes[size])}>
             IMDb
@@ -51,8 +57,8 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({
         </>
       ) : (
         <>
-          {showIcon && <Star className="w-3.5 h-3.5 text-slate-500" />}
-          <span>N/A</span>
+          {showIcon && <Star className="w-3 h-3 fill-amber-400 text-amber-400 shrink-0" />}
+          <span>{formatted}</span>
         </>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { FALLBACK_DATA } from './fallbackData';
+import imdbMetadata from '../../api/imdbMetadata.json';
 import type { CatalogItem, SeriesDetail, EpisodeStream } from '../types/movie';
 
 // Configurable API base URL, defaults to: https://movieapi-sage.vercel.app
@@ -51,6 +52,130 @@ const allCatalogItems: CatalogItem[] = [];
     }
   }
 });
+
+/**
+ * Universal enricher that upgrades raw or scraped items with authentic IMDb data
+ * and eliminates LK21 placeholder ratings (10 or >= 9.8).
+ */
+export function enrichCatalogItem(item: CatalogItem): CatalogItem {
+  if (!item) return item;
+  const rawSlug = String(item.slug || '');
+  const cleanSlug = rawSlug.replace(/^\//, '').trim();
+  const slugKey = cleanSlug.toLowerCase();
+  const titleKey = (item.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+  const meta =
+    (imdbMetadata as Record<string, any>)[cleanSlug] ||
+    (imdbMetadata as Record<string, any>)[rawSlug] ||
+    (imdbMetadata as Record<string, any>)[slugKey] ||
+    (imdbMetadata as Record<string, any>)[titleKey];
+
+  const rawRating = Number(item.rating);
+  const cleanItemRating = rawRating > 0 && rawRating < 9.8 ? rawRating : null;
+
+  if (meta) {
+    const metaRating = Number(meta.rating || meta.imdbRating);
+    const validRating = metaRating > 0 && metaRating < 9.8 ? metaRating : cleanItemRating;
+
+    return {
+      ...item,
+      title: meta.title || item.title,
+      poster:
+        meta.poster && meta.poster.includes('amazon.com')
+          ? meta.poster
+          : item.poster || meta.poster,
+      backdrop: meta.backdrop || item.backdrop || undefined,
+      rating: validRating,
+      imdbRating: validRating,
+      imdbId: meta.imdbId || item.imdbId || undefined,
+      synopsis: meta.synopsis || item.synopsis || undefined,
+      director: meta.director || item.director || undefined,
+      cast: meta.cast?.length ? meta.cast : item.cast || undefined,
+      genres: meta.genres?.length ? meta.genres : item.genres,
+    };
+  }
+
+  return {
+    ...item,
+    rating: cleanItemRating,
+    imdbRating: null,
+  };
+}
+
+/**
+ * Universal enricher for full series details to remove any mock placeholders
+ */
+export function enrichSeriesDetail(detail: SeriesDetail): SeriesDetail {
+  if (!detail) return detail;
+  const rawSlug = String(detail.slug || '');
+  const cleanSlug = rawSlug.replace(/^\//, '').trim();
+  const titleKey = (detail.title || '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+
+  const meta =
+    (imdbMetadata as Record<string, any>)[cleanSlug] ||
+    (imdbMetadata as Record<string, any>)[rawSlug] ||
+    (imdbMetadata as Record<string, any>)[titleKey];
+
+  const metaRating = Number(meta?.rating || meta?.imdbRating);
+  const rawRating = Number(detail.rating);
+  const validRating =
+    metaRating > 0 && metaRating < 9.8
+      ? metaRating
+      : rawRating > 0 && rawRating < 9.8
+      ? rawRating
+      : null;
+
+  const rawDirector = meta?.director || detail.metadata?.director;
+  const validDirector =
+    rawDirector && !['sutradara pilihan', 'sutradara', 'pilihan', 'unknown', '-'].includes(rawDirector.toLowerCase())
+      ? rawDirector
+      : undefined;
+
+  const rawCast = meta?.cast?.length ? meta.cast : detail.metadata?.cast || [];
+  const validCast = (rawCast as string[]).filter(
+    (c: string) => !['pemeran utama', 'bintang film', 'bintang tamu', 'unknown'].includes(c.toLowerCase())
+  );
+
+  const isDrakor =
+    detail.metadata?.genres?.some((g) => ['drakor', 'drama korea'].includes(g.toLowerCase())) ||
+    cleanSlug.includes('drakor');
+
+  const rawCountry = meta?.country || detail.metadata?.country;
+  const validCountry = isDrakor
+    ? 'Korea Selatan'
+    : rawCountry && !['korea selatan'].includes(rawCountry.toLowerCase())
+    ? rawCountry
+    : undefined;
+
+  const validSynopsis =
+    meta?.synopsis ||
+    (detail.synopsis && !detail.synopsis.includes('menyajikan tayangan sinematik lengkap')
+      ? detail.synopsis
+      : 'Sinopsis resmi belum tersedia untuk judul ini. Tayangan ini dapat langsung Anda tonton secara penuh beresolusi Full HD dengan subtitle Bahasa Indonesia.');
+
+  const validPoster =
+    meta?.poster && meta.poster.includes('amazon.com')
+      ? meta.poster
+      : detail.poster || meta?.poster || '';
+
+  return {
+    ...detail,
+    title: meta?.title || detail.title,
+    poster: validPoster,
+    backdrop: meta?.backdrop || detail.backdrop || validPoster,
+    rating: validRating,
+    imdbRating: validRating,
+    imdbId: meta?.imdbId || detail.imdbId || undefined,
+    synopsis: validSynopsis,
+    metadata: {
+      ...detail.metadata,
+      director: validDirector,
+      cast: validCast.length > 0 ? validCast : undefined,
+      country: validCountry,
+      genres: meta?.genres?.length ? meta.genres : detail.metadata?.genres,
+    },
+  };
+}
 
 /**
  * Clean fetch wrapper with deduplication, in-memory caching,
@@ -142,6 +267,22 @@ export async function apiClient<T>(
           if (!nav.next && nav.nextEpisode) {
             nav.next = nav.nextEpisode;
           }
+        }
+      }
+
+      // Automatically enrich all items and results with authentic IMDb metadata
+      if (json && typeof json === 'object') {
+        const obj = json as Record<string, unknown>;
+        if (Array.isArray(obj.items)) {
+          obj.items = (obj.items as CatalogItem[]).map(enrichCatalogItem);
+        } else if (Array.isArray(obj.results)) {
+          obj.results = (obj.results as CatalogItem[]).map(enrichCatalogItem);
+        } else if (
+          obj.results &&
+          typeof obj.results === 'object' &&
+          cleanEndpoint.includes('/series/')
+        ) {
+          obj.results = enrichSeriesDetail(obj.results as SeriesDetail);
         }
       }
 
@@ -329,11 +470,16 @@ function resolveFallback<T>(
         } as unknown as T;
       }
 
-      // Find in catalog items to build dynamic, accurate SeriesDetail
+      // Find in catalog items or imdbMetadata to build dynamic, accurate SeriesDetail
       const cleanSlug = String(slug || '').replace(/^\//, '');
+      const meta =
+        (imdbMetadata as Record<string, any>)[cleanSlug] ||
+        (imdbMetadata as Record<string, any>)[slug] ||
+        (imdbMetadata as Record<string, any>)[cleanSlug.toLowerCase()];
+
       const catalogItem = allCatalogItemsMap.get(slug) || allCatalogItemsMap.get(cleanSlug) || allCatalogItemsMap.get(`/${cleanSlug}`);
-      const title = catalogItem ? catalogItem.title : toTitleCase(slug);
-      const year = catalogItem?.year || 2026;
+      const title = meta?.title || (catalogItem ? catalogItem.title : toTitleCase(slug));
+      const year = meta?.year || catalogItem?.year || 2026;
 
       // Determine if this item is genuinely a series or a single full movie
       const isSeries = Boolean(
@@ -347,6 +493,35 @@ function resolveFallback<T>(
         slug.includes('-episode-')
       );
 
+      const rawRating = Number(meta?.rating || meta?.imdbRating || catalogItem?.rating);
+      const cleanRating = rawRating > 0 && rawRating < 9.8 ? rawRating : null;
+
+      const validDirector = meta?.director || catalogItem?.director || undefined;
+      const validCast = meta?.cast?.length ? meta.cast : catalogItem?.cast?.length ? catalogItem.cast : undefined;
+      const isDrakor =
+        catalogItem?.genres?.some((g) => ['drakor', 'drama korea'].includes(g.toLowerCase())) ||
+        cleanSlug.includes('drakor');
+      const validCountry = isDrakor ? 'Korea Selatan' : meta?.country || catalogItem?.country || undefined;
+
+      const validPoster =
+        meta?.poster && meta.poster.includes('amazon.com')
+          ? meta.poster
+          : catalogItem?.poster || meta?.poster || '';
+      const validBackdrop = meta?.backdrop || catalogItem?.backdrop || validPoster;
+
+      const validSynopsis =
+        meta?.synopsis ||
+        catalogItem?.synopsis ||
+        'Sinopsis resmi belum tersedia untuk judul ini. Tayangan ini dapat langsung Anda tonton secara penuh beresolusi Full HD dengan subtitle Bahasa Indonesia.';
+
+      const validGenres = meta?.genres?.length
+        ? meta.genres
+        : catalogItem?.genres?.length
+        ? catalogItem.genres
+        : isSeries
+        ? ['Drama']
+        : ['Movie'];
+
       if (!isSeries) {
         // Pure standalone Movie (Film Bioskop / Full Movie)
         const dynamicMovie: SeriesDetail = {
@@ -354,20 +529,18 @@ function resolveFallback<T>(
           fullTitle: `${title} (${year})`,
           slug,
           isMovie: true,
-          poster: catalogItem?.poster || '',
-          backdrop: catalogItem?.backdrop || catalogItem?.poster || '',
-          rating: catalogItem?.rating || 8.4,
-          imdbId: catalogItem?.imdbId,
-          imdbRating: catalogItem?.imdbRating || catalogItem?.rating || null,
+          poster: validPoster,
+          backdrop: validBackdrop,
+          rating: cleanRating,
+          imdbId: meta?.imdbId || catalogItem?.imdbId,
+          imdbRating: cleanRating,
           year,
-          synopsis:
-            catalogItem?.synopsis ||
-            `Film ${title} (${year}) menyajikan tayangan sinematik lengkap beresolusi tinggi dengan jalan cerita spektakuler dan tak terduga, didukung subtitle resmi Bahasa Indonesia.`,
+          synopsis: validSynopsis,
           metadata: {
-            director: 'Sutradara Pilihan',
-            cast: ['Pemeran Utama', 'Bintang Film'],
-            genres: catalogItem?.genres?.length ? catalogItem.genres : ['Movie', 'Action'],
-            country: catalogItem?.genres?.includes('Action') ? 'Amerika Serikat' : 'Korea Selatan',
+            director: validDirector,
+            cast: validCast,
+            genres: validGenres,
+            country: validCountry,
             totalSeasons: 1,
             totalEpisodes: 1,
             status: 'Full Movie',
@@ -404,20 +577,18 @@ function resolveFallback<T>(
         fullTitle: `${title} (${year})`,
         slug,
         isMovie: false,
-        poster: catalogItem?.poster || '',
-        backdrop: catalogItem?.backdrop || catalogItem?.poster || '',
-        rating: catalogItem?.rating || 8.4,
-        imdbId: catalogItem?.imdbId,
-        imdbRating: catalogItem?.imdbRating || catalogItem?.rating || null,
+        poster: validPoster,
+        backdrop: validBackdrop,
+        rating: cleanRating,
+        imdbId: meta?.imdbId || catalogItem?.imdbId,
+        imdbRating: cleanRating,
         year,
-        synopsis:
-          catalogItem?.synopsis ||
-          `Serial ${title} mengisahkan cerita yang penuh lika-liku emosi, aksi spektakuler, dan romansa memikat. Nikmati setiap episodenya dengan subtitle Bahasa Indonesia berkualitas tinggi.`,
+        synopsis: validSynopsis,
         metadata: {
-          director: 'Sutradara Pilihan',
-          cast: ['Pemeran Utama 1', 'Pemeran Utama 2', 'Bintang Tamu'],
-          genres: catalogItem?.genres?.length ? catalogItem.genres : ['Drama', 'Romance'],
-          country: catalogItem?.genres?.includes('Action') ? 'Amerika Serikat' : 'Korea Selatan',
+          director: validDirector,
+          cast: validCast,
+          genres: validGenres,
+          country: validCountry,
           totalSeasons: 1,
           totalEpisodes,
           status: catalogItem?.isComplete ? 'Completed' : 'Ongoing',
