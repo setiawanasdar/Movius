@@ -22,7 +22,8 @@ import {
   User,
   Users,
   Tv,
-  RotateCcw
+  RotateCcw,
+  Film
 } from 'lucide-react';
 
 export const DetailPage: React.FC = () => {
@@ -85,10 +86,17 @@ export const DetailPage: React.FC = () => {
     );
   }
 
+  const isMovie = Boolean(
+    series.isMovie ||
+    series.metadata?.status?.toLowerCase().includes('movie') ||
+    series.metadata?.totalEpisodes === 1 ||
+    (!series.metadata?.totalEpisodes && (!series.seasons || series.seasons.length <= 1) && series.seasons?.[0]?.episodes?.length === 1)
+  );
+
   const currentSeasonData =
     series.seasons?.find((s) => s.season === selectedSeason) || series.seasons?.[0];
   const firstEpisodeSlug =
-    series.seasons?.[0]?.episodes?.[0]?.slug || `${series.slug}-season-1-episode-1`;
+    series.seasons?.[0]?.episodes?.[0]?.slug || (isMovie ? series.slug : `${series.slug}-season-1-episode-1`);
 
   const handleToggleWatchlist = () => {
     toggleWatchlist({
@@ -98,8 +106,8 @@ export const DetailPage: React.FC = () => {
       rating: series.rating,
       year: series.year,
       genres: series.metadata?.genres || [],
-      status: series.metadata?.status || 'Ongoing',
-      totalEpisodes: series.metadata?.totalEpisodes,
+      status: isMovie ? 'Full Movie' : (series.metadata?.status || 'Ongoing'),
+      totalEpisodes: isMovie ? 1 : series.metadata?.totalEpisodes,
       addedAt: Date.now(),
     });
   };
@@ -137,7 +145,7 @@ export const DetailPage: React.FC = () => {
             {/* Badges row */}
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="px-3 py-1 rounded-full bg-rose-600 font-bold text-white uppercase text-[10px] tracking-wider">
-                {series.metadata?.status || 'SERIAL TV'}
+                {isMovie ? 'FILM BIOSKOP' : (series.metadata?.status || 'SERIAL TV')}
               </span>
               {series.rating && <RatingBadge rating={series.rating} size="md" />}
               {series.year && (
@@ -152,7 +160,12 @@ export const DetailPage: React.FC = () => {
                   {series.metadata.country}
                 </span>
               )}
-              {series.metadata?.totalEpisodes ? (
+              {isMovie ? (
+                <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/20 text-emerald-300 font-medium">
+                  <Film className="w-3.5 h-3.5 text-emerald-400" />
+                  Full Movie
+                </span>
+              ) : series.metadata?.totalEpisodes ? (
                 <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-white/10 text-slate-200">
                   <Tv className="w-3.5 h-3.5 text-slate-400" />
                   {series.metadata.totalEpisodes} Episode
@@ -197,7 +210,7 @@ export const DetailPage: React.FC = () => {
                 >
                   <RotateCcw className="w-5 h-5 text-slate-950" />
                   <span>
-                    Lanjutkan Ep {progress.episodeNumber} ({formatDuration(progress.currentTime)})
+                    {isMovie ? 'Lanjutkan Menonton' : `Lanjutkan Ep ${progress.episodeNumber}`} ({formatDuration(progress.currentTime)})
                   </span>
                 </Link>
               ) : (
@@ -206,7 +219,7 @@ export const DetailPage: React.FC = () => {
                   className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm md:text-base shadow-xl shadow-rose-950/40 transition-all active:scale-95"
                 >
                   <Play className="w-5 h-5 fill-white" />
-                  <span>Mulai Nonton Episode 1</span>
+                  <span>{isMovie ? 'Putar Film (Full Movie)' : 'Mulai Nonton Episode 1'}</span>
                 </Link>
               )}
 
@@ -272,52 +285,82 @@ export const DetailPage: React.FC = () => {
           </div>
         )}
 
-        {/* Season & Episode List Section */}
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
+        {/* Season & Episode List Section or Full Movie Cinema Card */}
+        {isMovie ? (
+          <div className="flex flex-col gap-4">
             <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
               <span className="w-1.5 h-4 bg-rose-600 rounded-full inline-block" />
-              Daftar Episode
+              Format Tayangan Penuh (Full Cinema)
             </h3>
-            <span className="text-xs text-slate-400">
-              Total {currentSeasonData?.episodes?.length || 0} episode tersedia
-            </span>
+            <div className="p-6 md:p-8 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900/80 to-slate-950 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl">
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-600/20 text-rose-400 font-bold text-xs border border-rose-500/30">
+                    Full Movie HD
+                  </span>
+                  <span className="text-xs text-slate-400 font-medium">1 Part Lengkap • Bebas Iklan</span>
+                </div>
+                <h4 className="text-xl md:text-2xl font-bold text-white">{series.title}</h4>
+                <p className="text-xs md:text-sm text-slate-300 max-w-xl">
+                  Film berdurasi penuh dengan dukungan multi-server berkecepatan tinggi, resolusi Full HD, dan subtitle resmi Bahasa Indonesia.
+                </p>
+              </div>
+              <Link
+                to={`/watch/${firstEpisodeSlug}?series=${series.slug}`}
+                className="shrink-0 inline-flex items-center gap-2.5 px-8 py-3.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base shadow-xl shadow-rose-950/50 transition-all active:scale-95 cursor-pointer"
+              >
+                <Play className="w-5 h-5 fill-white" />
+                <span>Tonton Film Sekarang</span>
+              </Link>
+            </div>
           </div>
-
-          {/* Season Selector */}
-          <SeasonSelector
-            seasons={series.seasons || []}
-            selectedSeason={selectedSeason}
-            onSelectSeason={setSelectedSeason}
-          />
-
-          {/* Episodes Grid */}
-          {currentSeasonData && currentSeasonData.episodes?.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {currentSeasonData.episodes.map((ep) => {
-                const isEpisodeWatched = progress?.episodeSlug === ep.slug;
-                return (
-                  <EpisodeCard
-                    key={ep.slug}
-                    episode={ep}
-                    seriesSlug={series.slug}
-                    isWatched={isEpisodeWatched}
-                  />
-                );
-              })}
+        ) : (
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg md:text-xl font-bold text-white flex items-center gap-2">
+                <span className="w-1.5 h-4 bg-rose-600 rounded-full inline-block" />
+                Daftar Episode
+              </h3>
+              <span className="text-xs text-slate-400">
+                Total {currentSeasonData?.episodes?.length || 0} episode tersedia
+              </span>
             </div>
-          ) : (
-            <div className="p-8 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800">
-              Belum ada episode yang terdaftar untuk musim ini.
-            </div>
-          )}
-        </div>
+
+            {/* Season Selector */}
+            <SeasonSelector
+              seasons={series.seasons || []}
+              selectedSeason={selectedSeason}
+              onSelectSeason={setSelectedSeason}
+            />
+
+            {/* Episodes Grid */}
+            {currentSeasonData && currentSeasonData.episodes?.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {currentSeasonData.episodes.map((ep) => {
+                  const isEpisodeWatched = progress?.episodeSlug === ep.slug;
+                  return (
+                    <EpisodeCard
+                      key={ep.slug}
+                      episode={ep}
+                      seriesSlug={series.slug}
+                      isWatched={isEpisodeWatched}
+                    />
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="p-8 text-center text-slate-400 bg-slate-900/40 rounded-2xl border border-slate-800">
+                Belum ada episode yang terdaftar untuk musim ini.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Related / Recommended Series Row */}
         {related.length > 0 && (
           <div className="pt-6 border-t border-slate-800/80">
             <MovieRow
-              title="Serial Terkait & Rekomendasi"
+              title={isMovie ? 'Film Terkait & Rekomendasi' : 'Serial Terkait & Rekomendasi'}
               subtitle="Tontonan serupa yang mungkin Anda sukai"
               items={related}
             />

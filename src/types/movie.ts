@@ -7,8 +7,11 @@ export interface CatalogItem {
   season?: number | null;
   episode?: number | null;
   isComplete?: boolean;
+  isSeries?: boolean;
+  isMovie?: boolean;
   genres: string[];
   url?: string;
+  source?: string;
   type?: 'series' | 'movie' | 'drakor';
 }
 
@@ -42,6 +45,7 @@ export interface SeriesDetail {
   poster: string;
   rating: number | null;
   year: number | null;
+  isMovie?: boolean;
   synopsis: string;
   metadata: {
     director: string;
@@ -68,12 +72,14 @@ export interface EpisodeStream {
   slug: string;
   episode: number;
   season: number;
+  isMovie?: boolean;
   series: {
     title: string;
     slug: string;
     poster: string;
     rating: number | null;
     year: number | null;
+    isMovie?: boolean;
     url?: string;
   };
   streaming: {

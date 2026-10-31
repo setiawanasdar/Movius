@@ -324,12 +324,71 @@ function resolveFallback<T>(
       const catalogItem = allCatalogItemsMap.get(slug);
       const title = catalogItem ? catalogItem.title : toTitleCase(slug);
       const year = catalogItem?.year || 2026;
-      const totalEpisodes = catalogItem?.episode || 12;
+
+      // Determine if this item is genuinely a series or a single full movie
+      const isSeries = Boolean(
+        catalogItem?.isSeries === true ||
+        (typeof catalogItem?.episode === 'number' && catalogItem.episode > 1) ||
+        (typeof catalogItem?.season === 'number' && catalogItem.season > 1) ||
+        catalogItem?.genres?.some((g) =>
+          ['drakor', 'drama korea', 'series', 'serial', 'tv series'].includes(g.toLowerCase())
+        ) ||
+        slug.includes('-season-') ||
+        slug.includes('-episode-')
+      );
+
+      if (!isSeries) {
+        // Pure standalone Movie (Film Bioskop / Full Movie)
+        const dynamicMovie: SeriesDetail = {
+          title,
+          fullTitle: `${title} (${year})`,
+          slug,
+          isMovie: true,
+          poster: catalogItem?.poster || '',
+          rating: catalogItem?.rating || 8.4,
+          year,
+          synopsis: `Film ${title} (${year}) menyajikan tayangan sinematik lengkap beresolusi tinggi dengan jalan cerita spektakuler dan tak terduga, didukung subtitle resmi Bahasa Indonesia.`,
+          metadata: {
+            director: 'Sutradara Pilihan',
+            cast: ['Pemeran Utama', 'Bintang Film'],
+            genres: catalogItem?.genres?.length ? catalogItem.genres : ['Movie', 'Action'],
+            country: catalogItem?.genres?.includes('Action') ? 'Amerika Serikat' : 'Korea Selatan',
+            totalSeasons: 1,
+            totalEpisodes: 1,
+            status: 'Full Movie',
+          },
+          seasons: [
+            {
+              season: 1,
+              totalEpisodes: 1,
+              episodes: [
+                {
+                  season: 1,
+                  episodeNumber: 1,
+                  title: `${title} (Full Movie)`,
+                  slug,
+                  url: catalogItem?.url || `https://tv12.lk21official.cc/${slug}`,
+                },
+              ],
+            },
+          ],
+          url: catalogItem?.url || `https://tv12.lk21official.cc/${slug}`,
+        };
+
+        return {
+          success: true,
+          results: dynamicMovie,
+        } as unknown as T;
+      }
+
+      // Genuine TV Series with multiple episodes
+      const totalEpisodes = catalogItem?.episode && typeof catalogItem.episode === 'number' ? catalogItem.episode : 12;
 
       const dynamicSeries: SeriesDetail = {
         title,
         fullTitle: `${title} (${year})`,
         slug,
+        isMovie: false,
         poster: catalogItem?.poster || '',
         rating: catalogItem?.rating || 8.4,
         year,
@@ -382,39 +441,68 @@ function resolveFallback<T>(
       const epMatch = epSlug.match(/-season-(\d+)-episode-(\d+)/i) || epSlug.match(/episode-(\d+)/i);
       const currentSeason = epMatch && epMatch[2] ? parseInt(epMatch[1], 10) : 1;
       const currentEp = epMatch && epMatch[2] ? parseInt(epMatch[2], 10) : (epMatch ? parseInt(epMatch[1], 10) : 1);
-      const seriesSlugClean = epSlug.replace(/-season-\d+-episode-\d+/, '');
-      const catalogItem = allCatalogItemsMap.get(seriesSlugClean) || allCatalogItemsMap.get(epSlug.replace(/-season-\d+-episode-\d+.*$/, ''));
+      const seriesSlugClean = epSlug.replace(/-season-\d+-episode-\d+.*$/, '');
+      const catalogItem = allCatalogItemsMap.get(seriesSlugClean) || allCatalogItemsMap.get(epSlug.replace(/-season-\d+-episode-\d+.*$/, '')) || allCatalogItemsMap.get(epSlug);
       const seriesTitle = catalogItem ? catalogItem.title : toTitleCase(seriesSlugClean);
 
       const baseSlug = seriesSlugClean.replace(/-\d{4}$/, '');
 
+      const isMovie = Boolean(
+        !epMatch &&
+        (catalogItem?.isSeries === false ||
+         (!catalogItem?.episode && !catalogItem?.season) ||
+         catalogItem?.source === 'tv12.lk21official.cc' ||
+         catalogItem?.url?.includes('lk21'))
+      );
+
+      const seriesInfo = {
+        title: seriesTitle,
+        slug: seriesSlugClean,
+        poster: catalogItem?.poster || '',
+        rating: catalogItem?.rating || 8.4,
+        year: catalogItem?.year || 2026,
+        isMovie,
+        url: catalogItem?.url || `https://tv12.lk21official.cc/${seriesSlugClean}`,
+      };
+
+      const nav = isMovie
+        ? { previous: null, next: null }
+        : {
+            previous: currentEp > 1 ? { slug: `${baseSlug}-season-1-episode-${currentEp - 1}-2026` } : null,
+            next: { slug: `${baseSlug}-season-1-episode-${currentEp + 1}-2026` },
+          };
+
       const dynamicEpisode: EpisodeStream = {
-        title: `${seriesTitle} Episode ${currentEp}`,
-        fullTitle: `${seriesTitle} Season ${currentSeason} Episode ${currentEp}`,
+        title: isMovie ? `${seriesTitle} (Full Movie)` : `${seriesTitle} Episode ${currentEp}`,
+        fullTitle: isMovie ? `${seriesTitle} (${catalogItem?.year || 2026}) Full Movie` : `${seriesTitle} Season ${currentSeason} Episode ${currentEp}`,
         slug: epSlug,
         episode: currentEp,
         season: currentSeason,
-        series: {
-          title: seriesTitle,
-          slug: seriesSlugClean,
-          poster: catalogItem?.poster || '',
-          rating: catalogItem?.rating || 8.4,
-          year: catalogItem?.year || 2026,
-          url: `https://tv.nontondrama.vip/${seriesSlugClean}`,
-        },
+        isMovie,
+        series: seriesInfo,
         streaming: {
           defaultStreamUrl: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`,
           servers: [
-            { server: 'HLS VIP (Sub Indo)', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`, isActive: true },
-            { server: 'CAST Fast', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=cast`, isActive: false },
-            { server: 'HYDRAX Mirror', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=hydrax`, isActive: false },
-            { server: 'MultiEmbed HD', url: `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}&s=${currentSeason}&e=${currentEp}`, isActive: false },
+            { server: 'HLS VIP (PlayCDN)', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`, isActive: true },
+            { server: 'Google Cast Fast', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=cast`, isActive: false },
+            { server: 'Hydrax HD Mirror', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=hydrax`, isActive: false },
+            {
+              server: 'MultiEmbed HD',
+              url: isMovie
+                ? `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}`
+                : `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}&s=${currentSeason}&e=${currentEp}`,
+              isActive: false,
+            },
+            {
+              server: 'VidSrc VIP Mirror',
+              url: isMovie
+                ? `https://vidsrc.to/embed/movie/${encodeURIComponent(seriesSlugClean)}`
+                : `https://vidsrc.to/embed/tv/${encodeURIComponent(seriesSlugClean)}/${currentSeason}/${currentEp}`,
+              isActive: false,
+            },
           ],
         },
-        navigation: {
-          previous: currentEp > 1 ? { slug: `${baseSlug}-season-1-episode-${currentEp - 1}-2026` } : null,
-          next: { slug: `${baseSlug}-season-1-episode-${currentEp + 1}-2026` },
-        },
+        navigation: nav,
       };
 
       return {

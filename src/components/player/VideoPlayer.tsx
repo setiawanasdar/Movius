@@ -184,6 +184,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
         {activeServerUrl ? (
           <iframe
+            key={activeServerUrl}
             ref={iframeRef}
             src={getPlayerEmbedSrc(activeServerUrl)}
             title={streamData.title}
@@ -245,9 +246,21 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               {streamData.title}
             </h3>
             <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
-              <span>Season {streamData.season}</span>
-              <span>•</span>
-              <span>Episode {streamData.episode}</span>
+              {streamData.isMovie ? (
+                <>
+                  <span className="px-2 py-0.5 rounded bg-rose-600/20 text-rose-400 font-bold border border-rose-500/30">
+                    Full Movie
+                  </span>
+                  <span>•</span>
+                  <span>Film Bioskop</span>
+                </>
+              ) : (
+                <>
+                  <span>Season {streamData.season}</span>
+                  <span>•</span>
+                  <span>Episode {streamData.episode}</span>
+                </>
+              )}
               <span>•</span>
               <span className="flex items-center gap-1 text-emerald-400 font-medium">
                 <ShieldCheck className="w-3.5 h-3.5" /> Subtitle Indonesia
@@ -255,28 +268,30 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
           </div>
 
-          {/* Episode Prev / Next navigation */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => handleNavigateEpisode(streamData.navigation?.previous?.slug)}
-              disabled={!streamData.navigation?.previous}
-              aria-label="Episode Sebelumnya"
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700/80 text-slate-200 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
-            >
-              <SkipBack className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sebelumnya</span>
-            </button>
+          {/* Episode Prev / Next navigation (only for Series) */}
+          {!streamData.isMovie && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleNavigateEpisode(streamData.navigation?.previous?.slug)}
+                disabled={!streamData.navigation?.previous}
+                aria-label="Episode Sebelumnya"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 border border-slate-700/80 text-slate-200 hover:bg-slate-700 disabled:opacity-40 disabled:pointer-events-none transition-all cursor-pointer"
+              >
+                <SkipBack className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Sebelumnya</span>
+              </button>
 
-            <button
-              onClick={() => handleNavigateEpisode(streamData.navigation?.next?.slug)}
-              disabled={!streamData.navigation?.next}
-              aria-label="Episode Berikutnya"
-              className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-rose-950/30 cursor-pointer"
-            >
-              <span className="hidden sm:inline">Berikutnya</span>
-              <SkipForward className="w-3.5 h-3.5" />
-            </button>
-          </div>
+              <button
+                onClick={() => handleNavigateEpisode(streamData.navigation?.next?.slug)}
+                disabled={!streamData.navigation?.next}
+                aria-label="Episode Berikutnya"
+                className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white disabled:opacity-40 disabled:pointer-events-none transition-all shadow-md shadow-rose-950/30 cursor-pointer"
+              >
+                <span className="hidden sm:inline">Berikutnya</span>
+                <SkipForward className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Bottom bar: Server Switcher + Player View Tools */}
@@ -327,16 +342,18 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
               <span className="hidden sm:inline font-medium">Buka di Tab Baru</span>
             </a>
 
-            {/* Autoplay next toggle */}
-            <label className="flex items-center gap-1.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={autoPlayNext}
-                onChange={toggleAutoPlay}
-                className="w-3.5 h-3.5 accent-rose-600 rounded cursor-pointer"
-              />
-              <span className="hidden sm:inline text-slate-300">Auto Next</span>
-            </label>
+            {/* Autoplay next toggle (only for Series) */}
+            {!streamData.isMovie && (
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={autoPlayNext}
+                  onChange={toggleAutoPlay}
+                  className="w-3.5 h-3.5 accent-rose-600 rounded cursor-pointer"
+                />
+                <span className="hidden sm:inline text-slate-300">Auto Next</span>
+              </label>
+            )}
 
             {/* Theater Mode Toggle */}
             <button

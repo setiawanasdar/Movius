@@ -137,6 +137,45 @@ export default async function handler(req, res) {
   // 3. ACTION: Resolve Stream and Render Player
   let targetUrl = queryUrl ? decodeURIComponent(queryUrl) : '';
 
+  // Direct server handling for MultiEmbed and VidSrc
+  if (server === 'multiembed' || (targetUrl && targetUrl.includes('multiembed.mov'))) {
+    let embedUrl = targetUrl;
+    if (!embedUrl || !embedUrl.includes('multiembed.mov')) {
+      const cleanEpisode = decodeURIComponent(episode || '');
+      const isMovieEp = !cleanEpisode.includes('-season-') && !cleanEpisode.includes('episode-');
+      const epMatch = cleanEpisode.match(/-season-(\d+)-episode-(\d+)/i) || cleanEpisode.match(/episode-(\d+)/i);
+      const season = epMatch && epMatch[2] ? epMatch[1] : '1';
+      const epNum = epMatch && epMatch[2] ? epMatch[2] : (epMatch ? epMatch[1] : '1');
+      const cleanSlug = cleanEpisode.replace(/-season-\d+-episode-\d+.*$/, '').replace(/-\d{4}$/, '').trim();
+      embedUrl = isMovieEp
+        ? `https://multiembed.mov/?video_id=${encodeURIComponent(cleanSlug)}`
+        : `https://multiembed.mov/?video_id=${encodeURIComponent(cleanSlug)}&s=${season}&e=${epNum}`;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(renderIframeWrapper(embedUrl));
+  }
+
+  if (server === 'vidsrc' || (targetUrl && targetUrl.includes('vidsrc.to'))) {
+    let embedUrl = targetUrl;
+    if (!embedUrl || !embedUrl.includes('vidsrc.to')) {
+      const cleanEpisode = decodeURIComponent(episode || '');
+      const isMovieEp = !cleanEpisode.includes('-season-') && !cleanEpisode.includes('episode-');
+      const epMatch = cleanEpisode.match(/-season-(\d+)-episode-(\d+)/i) || cleanEpisode.match(/episode-(\d+)/i);
+      const season = epMatch && epMatch[2] ? epMatch[1] : '1';
+      const epNum = epMatch && epMatch[2] ? epMatch[2] : (epMatch ? epMatch[1] : '1');
+      const cleanSlug = cleanEpisode.replace(/-season-\d+-episode-\d+.*$/, '').replace(/-\d{4}$/, '').trim();
+      embedUrl = isMovieEp
+        ? `https://vidsrc.to/embed/movie/${encodeURIComponent(cleanSlug)}`
+        : `https://vidsrc.to/embed/tv/${encodeURIComponent(cleanSlug)}/${season}/${epNum}`;
+    }
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(renderIframeWrapper(embedUrl));
+  }
+
+  // If targetUrl already contains a direct verified videonode hash:
+  // e.g. https://videonode.de/iframe3/cast/6K8UuC6qf9Q13N0r4r0j3y
+  const directHashMatch = targetUrl.match(/\/iframe3\/([^/]+)\/([a-zA-Z0-9_\-]{16,40})$/);
+
   // If queryUrl contains a slug in /iframe3/:host/:id (e.g. /iframe3/p2p/deadly-tag-season-1-episode-1-2026)
   const initialVideonodeMatch = targetUrl.match(/\/iframe3\/([^/]+)\/([^/?]+)/);
   if (initialVideonodeMatch) {
@@ -150,8 +189,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // If episode slug was provided in query, dynamically resolve its actual videonode URL
-  if (episode) {
+  // Only resolve from episode if targetUrl was NOT provided or does not have a direct hash
+  if (!directHashMatch && episode) {
     const cleanEpisode = decodeURIComponent(episode);
     const resolvedUrl = await resolveVideonodeUrlForEpisode(cleanEpisode, server);
     if (resolvedUrl) {
@@ -282,18 +321,28 @@ async function resolveVideonodeUrlForEpisode(episodeSlug, server = 'p2p') {
     seriesBase
   ];
 
-  // 1. Fast dictionary lookup from 1,745+ verified hashes
+  // 1. Fast dictionary lookup from verified hashes
   for (const cand of candidates) {
-    if (KNOWN_EPISODE_HASHES[cand]?.[server]) {
-      const url = KNOWN_EPISODE_HASHES[cand][server];
-      episodeCache.set(cacheKey, url);
-      return url;
-    }
-    // Also try p2p if requested server variant is missing
-    if (KNOWN_EPISODE_HASHES[cand]?.p2p) {
-      const url = KNOWN_EPISODE_HASHES[cand].p2p;
-      episodeCache.set(cacheKey, url);
-      return url;
+    const entry = KNOWN_EPISODE_HASHES[cand];
+    if (entry) {
+      if (entry[server]) {
+        const url = entry[server];
+        episodeCache.set(cacheKey, url);
+        return url;
+      }
+      // If requested server is 'cast' or 'hydrax', and entry has p2p hash, adapt host to requested server!
+      if ((server === 'cast' || server === 'hydrax') && entry.p2p) {
+        const hashMatch = entry.p2p.match(/\/iframe3\/p2p\/([a-zA-Z0-9_\-]{16,40})/);
+        if (hashMatch) {
+          const adaptedUrl = `https://videonode.de/iframe3/${server}/${hashMatch[1]}`;
+          episodeCache.set(cacheKey, adaptedUrl);
+          return adaptedUrl;
+        }
+      }
+      if (server === 'p2p' && entry.p2p) {
+        episodeCache.set(cacheKey, entry.p2p);
+        return entry.p2p;
+      }
     }
   }
 
@@ -476,6 +525,7 @@ function renderFallbackPlayer(targetTitle = '', rawUrl = '') {
     .replace(/^https?:\/\/[^/]+\//, '')
     .replace(/\/iframe3\/[^/]+\//, '');
 
+  const isMovie = !cleanStr.includes('-season-') && !cleanStr.includes('episode-');
   const epMatch = cleanStr.match(/-season-(\d+)-episode-(\d+)/i) || cleanStr.match(/episode-(\d+)/i);
   const season = epMatch && epMatch[2] ? epMatch[1] : '1';
   const episode = epMatch && epMatch[2] ? epMatch[2] : (epMatch ? epMatch[1] : '1');
@@ -485,14 +535,18 @@ function renderFallbackPlayer(targetTitle = '', rawUrl = '') {
     .replace(/[^a-zA-Z0-9-]/g, '')
     .trim() || 'movie';
 
-  const multiEmbedSrc = `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlug)}&s=${season}&e=${episode}`;
+  const multiEmbedSrc = isMovie
+    ? `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlug)}`
+    : `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlug)}&s=${season}&e=${episode}`;
+
+  const titleDisplay = isMovie ? `${seriesSlug} (Full Movie)` : `${seriesSlug} - Episode ${episode}`;
 
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(seriesSlug)} - Episode ${episode}</title>
+  <title>${escapeHtml(titleDisplay)}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #020617; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
