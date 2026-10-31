@@ -119,9 +119,9 @@ export const DetailPage: React.FC = () => {
         {/* Backdrop Blurred Artwork */}
         <div className="absolute inset-0">
           <img
-            src={getPosterUrl(series.poster)}
+            src={getPosterUrl(series.backdrop || series.poster)}
             alt={series.title}
-            className="w-full h-full object-cover object-center filter blur-2xl scale-125 opacity-25"
+            className="w-full h-full object-cover object-center filter blur-2xl scale-125 opacity-30"
           />
         </div>
 

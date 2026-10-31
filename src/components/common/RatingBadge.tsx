@@ -25,32 +25,36 @@ export const RatingBadge: React.FC<RatingBadgeProps> = ({
     lg: 'text-sm px-2.5 py-1 gap-2 font-semibold',
   };
 
-  const iconSizes = {
-    sm: 'w-3 h-3',
-    md: 'w-3.5 h-3.5',
-    lg: 'w-4 h-4',
+  const imdbLabelSizes = {
+    sm: 'text-[9px] px-1 rounded',
+    md: 'text-[10px] px-1 rounded',
+    lg: 'text-xs px-1.5 rounded',
   };
 
   return (
     <div
       className={cn(
-        'inline-flex items-center font-medium rounded-md backdrop-blur-md shadow-sm select-none',
+        'inline-flex items-center font-bold rounded-md backdrop-blur-md shadow-sm select-none',
         isAvailable
-          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-          : 'bg-slate-800/60 text-slate-400 border border-slate-700/40',
+          ? 'bg-amber-400 text-slate-950 border border-amber-300'
+          : 'bg-slate-800/80 text-slate-400 border border-slate-700/40',
         sizeClasses[size],
         className
       )}
     >
-      {showIcon && (
-        <Star
-          className={cn(
-            iconSizes[size],
-            isAvailable ? 'fill-amber-400 text-amber-400' : 'text-slate-500'
-          )}
-        />
+      {isAvailable ? (
+        <>
+          <span className={cn('bg-slate-950 text-amber-400 font-black tracking-tight', imdbLabelSizes[size])}>
+            IMDb
+          </span>
+          <span>{formatted}</span>
+        </>
+      ) : (
+        <>
+          {showIcon && <Star className="w-3.5 h-3.5 text-slate-500" />}
+          <span>N/A</span>
+        </>
       )}
-      <span>{formatted}</span>
     </div>
   );
 };

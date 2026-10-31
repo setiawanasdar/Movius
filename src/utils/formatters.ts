@@ -2,7 +2,11 @@ export function formatRating(rating: number | null | undefined): string {
   if (rating === null || rating === undefined || isNaN(rating) || rating === 0) {
     return 'N/A';
   }
-  return rating.toFixed(1);
+  let val = rating;
+  if (val > 10 && val <= 100) {
+    val = val / 10;
+  }
+  return val.toFixed(1);
 }
 
 export function formatDuration(seconds: number): string {

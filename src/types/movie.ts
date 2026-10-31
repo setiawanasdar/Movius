@@ -13,6 +13,10 @@ export interface CatalogItem {
   url?: string;
   source?: string;
   type?: 'series' | 'movie' | 'drakor';
+  imdbId?: string;
+  imdbRating?: number | string | null;
+  synopsis?: string;
+  backdrop?: string;
 }
 
 export interface CatalogResponse {
@@ -47,6 +51,9 @@ export interface SeriesDetail {
   year: number | null;
   isMovie?: boolean;
   synopsis: string;
+  backdrop?: string;
+  imdbId?: string;
+  imdbRating?: number | string | null;
   metadata: {
     director: string;
     cast: string[];

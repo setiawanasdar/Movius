@@ -52,7 +52,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
       {/* Background Backdrop Image */}
       <div className="absolute inset-0">
         <img
-          src={getPosterUrl(current.poster)}
+          src={getPosterUrl(current.backdrop || current.poster)}
           alt={current.title}
           className="w-full h-full object-cover object-center filter blur-xl scale-110 opacity-30 transform duration-1000 ease-out"
         />
@@ -107,7 +107,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
 
           {/* Description */}
           <p className="text-xs sm:text-sm md:text-base text-slate-300/90 line-clamp-3 leading-relaxed max-w-xl">
-            Tonton {current.title} dengan subtitle Bahasa Indonesia berkualitas tinggi, bagian dari <strong>4.427+ judul film & serial</strong> di Movius.
+            {current.synopsis || `Tonton ${current.title} dengan subtitle Bahasa Indonesia berkualitas tinggi, bagian dari koleksi 4.427+ judul film & serial di Movius.`}
           </p>
 
           {/* Action Buttons */}

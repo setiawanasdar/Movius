@@ -28,6 +28,9 @@ function toTitleCase(str: string): string {
 
 // Build comprehensive unified catalog map for robust offline/fallback lookup
 const allCatalogItemsMap = new Map<string, CatalogItem>();
+const seenUniqueSlugs = new Set<string>();
+const allCatalogItems: CatalogItem[] = [];
+
 [
   ...(FALLBACK_DATA.popular?.items || []),
   ...(FALLBACK_DATA.latest?.items || []),
@@ -38,10 +41,16 @@ const allCatalogItemsMap = new Map<string, CatalogItem>();
   ...(FALLBACK_DATA.west?.items || []),
 ].forEach((item) => {
   if (item && item.slug) {
-    allCatalogItemsMap.set(item.slug, item as CatalogItem);
+    const raw = String(item.slug);
+    const clean = raw.replace(/^\//, '');
+    allCatalogItemsMap.set(raw, item as CatalogItem);
+    allCatalogItemsMap.set(clean, item as CatalogItem);
+    if (!seenUniqueSlugs.has(clean)) {
+      seenUniqueSlugs.add(clean);
+      allCatalogItems.push(item as CatalogItem);
+    }
   }
 });
-const allCatalogItems: CatalogItem[] = Array.from(allCatalogItemsMap.values());
 
 /**
  * Clean fetch wrapper with deduplication, in-memory caching,
@@ -321,7 +330,8 @@ function resolveFallback<T>(
       }
 
       // Find in catalog items to build dynamic, accurate SeriesDetail
-      const catalogItem = allCatalogItemsMap.get(slug);
+      const cleanSlug = String(slug || '').replace(/^\//, '');
+      const catalogItem = allCatalogItemsMap.get(slug) || allCatalogItemsMap.get(cleanSlug) || allCatalogItemsMap.get(`/${cleanSlug}`);
       const title = catalogItem ? catalogItem.title : toTitleCase(slug);
       const year = catalogItem?.year || 2026;
 
@@ -345,9 +355,14 @@ function resolveFallback<T>(
           slug,
           isMovie: true,
           poster: catalogItem?.poster || '',
+          backdrop: catalogItem?.backdrop || catalogItem?.poster || '',
           rating: catalogItem?.rating || 8.4,
+          imdbId: catalogItem?.imdbId,
+          imdbRating: catalogItem?.imdbRating || catalogItem?.rating || null,
           year,
-          synopsis: `Film ${title} (${year}) menyajikan tayangan sinematik lengkap beresolusi tinggi dengan jalan cerita spektakuler dan tak terduga, didukung subtitle resmi Bahasa Indonesia.`,
+          synopsis:
+            catalogItem?.synopsis ||
+            `Film ${title} (${year}) menyajikan tayangan sinematik lengkap beresolusi tinggi dengan jalan cerita spektakuler dan tak terduga, didukung subtitle resmi Bahasa Indonesia.`,
           metadata: {
             director: 'Sutradara Pilihan',
             cast: ['Pemeran Utama', 'Bintang Film'],
@@ -390,9 +405,14 @@ function resolveFallback<T>(
         slug,
         isMovie: false,
         poster: catalogItem?.poster || '',
+        backdrop: catalogItem?.backdrop || catalogItem?.poster || '',
         rating: catalogItem?.rating || 8.4,
+        imdbId: catalogItem?.imdbId,
+        imdbRating: catalogItem?.imdbRating || catalogItem?.rating || null,
         year,
-        synopsis: `Serial ${title} mengisahkan cerita yang penuh lika-liku emosi, aksi spektakuler, dan romansa memikat. Nikmati setiap episodenya dengan subtitle Bahasa Indonesia berkualitas tinggi.`,
+        synopsis:
+          catalogItem?.synopsis ||
+          `Serial ${title} mengisahkan cerita yang penuh lika-liku emosi, aksi spektakuler, dan romansa memikat. Nikmati setiap episodenya dengan subtitle Bahasa Indonesia berkualitas tinggi.`,
         metadata: {
           director: 'Sutradara Pilihan',
           cast: ['Pemeran Utama 1', 'Pemeran Utama 2', 'Bintang Tamu'],
