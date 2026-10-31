@@ -114,6 +114,26 @@ export async function apiClient<T>(
         throw new Error(json.error);
       }
 
+      // Normalize episode payload between parentSeries and series
+      if (cleanEndpoint.includes('/episode/') && json && json.results) {
+        const r = json.results as Record<string, unknown>;
+        if (!r.series && r.parentSeries) {
+          r.series = r.parentSeries;
+        }
+        if (!r.slug && r.episodeSlug) {
+          r.slug = r.episodeSlug;
+        }
+        if (r.navigation && typeof r.navigation === 'object') {
+          const nav = r.navigation as Record<string, unknown>;
+          if (!nav.previous && nav.prevEpisode) {
+            nav.previous = nav.prevEpisode;
+          }
+          if (!nav.next && nav.nextEpisode) {
+            nav.next = nav.nextEpisode;
+          }
+        }
+      }
+
       // Save to cache
       apiCache.set(cacheKey, {
         data: json,
