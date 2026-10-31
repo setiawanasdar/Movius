@@ -1,8 +1,11 @@
+import { HARVESTED_HASHES } from './harvestedHashes.js';
+
 // In-memory runtime cache for scraped episode URLs
 const episodeCache = new Map();
 
-// Pre-verified high-speed known hashes for top catalog series
+// Combined verified high-speed known hashes (1,745+ verified items + presets)
 const KNOWN_EPISODE_HASHES = {
+  ...HARVESTED_HASHES,
   'doctor-x-age-white-mafia-season-1-episode-1-2026': {
     p2p: 'https://videonode.de/iframe3/p2p/EHhKGEndUtY4WVJyiZnMaA',
     cast: 'https://videonode.de/iframe3/cast/Rnzl7s1xMaQ0Wn34cxgVoQ',
@@ -134,7 +137,20 @@ export default async function handler(req, res) {
   // 3. ACTION: Resolve Stream and Render Player
   let targetUrl = queryUrl ? decodeURIComponent(queryUrl) : '';
 
-  // If episode slug was provided, dynamically resolve its actual videonode URL
+  // If queryUrl contains a slug in /iframe3/:host/:id (e.g. /iframe3/p2p/deadly-tag-season-1-episode-1-2026)
+  const initialVideonodeMatch = targetUrl.match(/\/iframe3\/([^/]+)\/([^/?]+)/);
+  if (initialVideonodeMatch) {
+    const rawHost = initialVideonodeMatch[1];
+    const rawId = initialVideonodeMatch[2];
+    if (rawId.includes('-') || rawId.length > 24) {
+      const resolvedFromSlug = await resolveVideonodeUrlForEpisode(rawId, rawHost);
+      if (resolvedFromSlug) {
+        targetUrl = resolvedFromSlug;
+      }
+    }
+  }
+
+  // If episode slug was provided in query, dynamically resolve its actual videonode URL
   if (episode) {
     const cleanEpisode = decodeURIComponent(episode);
     const resolvedUrl = await resolveVideonodeUrlForEpisode(cleanEpisode, server);
@@ -143,16 +159,34 @@ export default async function handler(req, res) {
     }
   }
 
+  // If targetUrl is an external iframe provider (e.g. multiembed.mov, vidsrc)
+  if (targetUrl && !targetUrl.includes('videonode.de') && !targetUrl.includes('playcdn.de')) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.status(200).send(renderIframeWrapper(targetUrl));
+  }
+
   if (!targetUrl) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(renderFallbackPlayer(episode || 'Video Player'));
+    return res.status(200).send(renderFallbackPlayer(episode || 'Video Player', queryUrl));
   }
 
   try {
     const videonodeMatch = targetUrl.match(/\/iframe3\/([^/]+)\/([^/?]+)/);
     if (videonodeMatch) {
-      const host = videonodeMatch[1];
-      const id = videonodeMatch[2];
+      let host = videonodeMatch[1];
+      let id = videonodeMatch[2];
+
+      // Second defensive check: If id is a slug, resolve it to hash
+      if (id.includes('-') || id.length > 24) {
+        const resolved = await resolveVideonodeUrlForEpisode(id, host);
+        if (resolved) {
+          const newMatch = resolved.match(/\/iframe3\/([^/]+)\/([^/?]+)/);
+          if (newMatch) {
+            host = newMatch[1];
+            id = newMatch[2];
+          }
+        }
+      }
 
       try {
         const apiRes = await fetch('https://videonode.de/api.php', {
@@ -204,11 +238,11 @@ export default async function handler(req, res) {
 
     // Direct embed or fallback
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(renderFallbackPlayer(targetUrl));
+    return res.status(200).send(renderFallbackPlayer(episode || targetUrl, queryUrl));
   } catch (err) {
     console.error('Embed handler failed:', err);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.status(200).send(renderFallbackPlayer(targetUrl));
+    return res.status(200).send(renderFallbackPlayer(episode || targetUrl, queryUrl));
   }
 }
 
@@ -216,26 +250,54 @@ export default async function handler(req, res) {
  * Resolves the genuine videonode streaming URL for any episode or movie
  */
 async function resolveVideonodeUrlForEpisode(episodeSlug, server = 'p2p') {
-  const cacheKey = `${episodeSlug}_${server}`;
+  if (!episodeSlug) return null;
+  const cleanEp = decodeURIComponent(episodeSlug);
+  const cacheKey = `${cleanEp}_${server}`;
   if (episodeCache.has(cacheKey)) {
     return episodeCache.get(cacheKey);
   }
 
-  // Check verified pre-known hashes
-  if (KNOWN_EPISODE_HASHES[episodeSlug]?.[server]) {
-    const url = KNOWN_EPISODE_HASHES[episodeSlug][server];
-    episodeCache.set(cacheKey, url);
-    return url;
-  }
+  // Generate candidate keys to search in verified hashes dictionary
+  const cleanBase = cleanEp.replace(/-\d{4}$/, '');
+  const epMatch = cleanEp.match(/-season-(\d+)-episode-(\d+)/i) || cleanEp.match(/episode-(\d+)/i);
+  const currentEpNum = epMatch && epMatch[2] ? epMatch[2] : (epMatch ? epMatch[1] : '1');
+  const seriesBase = cleanBase.replace(/-season-\d+-episode-\d+.*$/, '');
+  const yearMatch = cleanEp.match(/\d{4}$/);
+  const year = yearMatch ? yearMatch[0] : '2026';
 
   const candidates = [
-    episodeSlug,
-    episodeSlug.replace(/-\d{4}$/, '-2024'),
-    episodeSlug.replace(/-\d{4}$/, '-2025'),
-    episodeSlug.replace(/-\d{4}$/, '-2026'),
-    episodeSlug.replace(/-\d{4}$/, ''),
+    cleanEp,
+    cleanBase,
+    `${cleanBase}-season-1-episode-${currentEpNum}-${year}`,
+    `${cleanBase}-season-1-episode-${currentEpNum}-2026`,
+    `${cleanBase}-season-1-episode-${currentEpNum}-2025`,
+    `${cleanBase}-season-1-episode-${currentEpNum}-2024`,
+    `${cleanBase}-season-1-episode-${currentEpNum}`,
+    `${seriesBase}-season-1-episode-${currentEpNum}-${year}`,
+    `${seriesBase}-season-1-episode-${currentEpNum}-2026`,
+    `${seriesBase}-season-1-episode-${currentEpNum}`,
+    `${cleanBase}-episode-${currentEpNum}`,
+    `${seriesBase}-${year}`,
+    `${seriesBase}-2026`,
+    seriesBase
   ];
 
+  // 1. Fast dictionary lookup from 1,745+ verified hashes
+  for (const cand of candidates) {
+    if (KNOWN_EPISODE_HASHES[cand]?.[server]) {
+      const url = KNOWN_EPISODE_HASHES[cand][server];
+      episodeCache.set(cacheKey, url);
+      return url;
+    }
+    // Also try p2p if requested server variant is missing
+    if (KNOWN_EPISODE_HASHES[cand]?.p2p) {
+      const url = KNOWN_EPISODE_HASHES[cand].p2p;
+      episodeCache.set(cacheKey, url);
+      return url;
+    }
+  }
+
+  // 2. Upstream live scrape fallback
   const seen = new Set();
   for (const slug of candidates) {
     if (seen.has(slug)) continue;
@@ -291,7 +353,7 @@ function renderCustomPlayer(proxiedM3u8Url, title = 'Video Player', poster = '')
     @keyframes spin { to { transform: rotate(360deg); } }
     .loading-text { font-size: 13px; font-weight: 600; color: #e2e8f0; letter-spacing: 0.3px; }
     .sub-badge { font-size: 11px; color: #34d399; background: rgba(52, 211, 153, 0.15); padding: 3px 8px; border-radius: 6px; border: 1px solid rgba(52, 211, 153, 0.3); }
-    .status-badge { position: absolute; top: 12px; left: 12px; z-index: 5; background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; pointer-events: none; }
+    .status-badge { position: absolute; top: 12px; left: 12px; z-index: 5; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; font-size: 11px; padding: 4px 10px; border-radius: 6px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; pointer-events: none; }
     .status-dot { width: 6px; height: 6px; border-radius: 50%; background: #10b981; }
   </style>
 </head>
@@ -340,7 +402,7 @@ function renderCustomPlayer(proxiedM3u8Url, title = 'Video Player', poster = '')
       hls.on(Hls.Events.MANIFEST_PARSED, function() {
         hideLoading();
         video.play().catch(function() {
-          // Autoplay was prevented by browser policy (e.g. user gesture required)
+          // Autoplay was prevented by browser policy (user gesture required)
         });
       });
 
@@ -361,22 +423,18 @@ function renderCustomPlayer(proxiedM3u8Url, title = 'Video Player', poster = '')
         }
       });
 
-      // Watchdog: If stalled for more than 5s, try startLoad
       setTimeout(() => {
         if (!isHidden) {
           hls.startLoad();
         }
       }, 5000);
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // Native Safari iOS HLS support
       video.src = hlsUrl;
       video.addEventListener('loadedmetadata', function() {
         hideLoading();
         video.play().catch(function() {});
       });
     } else {
-      // Standard video fallback
-      video.src = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4';
       hideLoading();
     }
 
@@ -413,33 +471,53 @@ function renderIframeWrapper(embedUrl) {
 </html>`;
 }
 
-function renderFallbackPlayer(targetTitle) {
+function renderFallbackPlayer(targetTitle = '', rawUrl = '') {
+  const cleanStr = String(targetTitle || rawUrl || 'Serial Film')
+    .replace(/^https?:\/\/[^/]+\//, '')
+    .replace(/\/iframe3\/[^/]+\//, '');
+
+  const epMatch = cleanStr.match(/-season-(\d+)-episode-(\d+)/i) || cleanStr.match(/episode-(\d+)/i);
+  const season = epMatch && epMatch[2] ? epMatch[1] : '1';
+  const episode = epMatch && epMatch[2] ? epMatch[2] : (epMatch ? epMatch[1] : '1');
+  const seriesSlug = cleanStr
+    .replace(/-season-\d+-episode-\d+.*$/, '')
+    .replace(/-\d{4}$/, '')
+    .replace(/[^a-zA-Z0-9-]/g, '')
+    .trim() || 'movie';
+
+  const multiEmbedSrc = `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlug)}&s=${season}&e=${episode}`;
+
   return `<!DOCTYPE html>
 <html lang="id">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(targetTitle)}</title>
+  <title>${escapeHtml(seriesSlug)} - Episode ${episode}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; display: flex; align-items: center; justify-content: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-    #video-container { position: relative; width: 100%; height: 100%; background: #000; display: flex; align-items: center; justify-content: center; }
-    video { width: 100%; height: 100%; object-fit: contain; background: #000; outline: none; }
-    .badge { position: absolute; top: 12px; left: 12px; z-index: 20; background: rgba(225, 29, 72, 0.9); color: #fff; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    html, body { width: 100%; height: 100%; background: #020617; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    #wrapper { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #000; }
+    .badge-bar { position: absolute; top: 12px; left: 12px; z-index: 20; display: flex; align-items: center; gap: 8px; pointer-events: none; }
+    .status-badge { background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #38bdf8; box-shadow: 0 0 10px #38bdf8; }
+    iframe { width: 100%; height: 100%; border: none; flex: 1; display: block; }
   </style>
 </head>
 <body>
-  <div id="video-container">
-    <div class="badge">
-      <span>● Server Cadangan Aktif</span>
+  <div id="wrapper">
+    <div class="badge-bar">
+      <div class="status-badge">
+        <div class="dot"></div>
+        <span>MultiEmbed HD (Server Cadangan Aktif)</span>
+      </div>
     </div>
-    <video
-      id="player"
-      controls
-      playsinline
-      autoplay
-      src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
-    ></video>
+    <iframe
+      src="${escapeHtml(multiEmbedSrc)}"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      allowfullscreen="true"
+      webkitallowfullscreen="true"
+      mozallowfullscreen="true"
+    ></iframe>
   </div>
 </body>
 </html>`;

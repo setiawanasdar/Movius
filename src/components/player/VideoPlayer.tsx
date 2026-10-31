@@ -136,7 +136,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return url;
     }
     if (url.includes('videonode.de') || url.includes('playcdn.de')) {
-      return `/api/embed?url=${encodeURIComponent(url)}`;
+      const epParam = streamData?.slug ? `&episode=${encodeURIComponent(streamData.slug)}` : '';
+      return `/api/embed?url=${encodeURIComponent(url)}${epParam}`;
     }
     return url;
   };
