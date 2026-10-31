@@ -127,9 +127,12 @@ export const BrowsePage: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-black text-white tracking-tight flex items-center gap-2.5">
           <Layers className="w-7 h-7 text-rose-500" />
           <span>Jelajah Katalog Streaming</span>
+          <span className="text-xs sm:text-sm font-bold px-3 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400">
+            4.427 Judul Tersedia
+          </span>
         </h1>
         <p className="text-sm text-slate-400">
-          Filter ribuan episode drama korea, serial TV, dan film sub Indo terlengkap.
+          Koleksi terlengkap film bioskop dan serial drama mancanegara subtitle Indonesia dari LK21 dan NontonDrama.
         </p>
       </div>
 
@@ -221,7 +224,7 @@ export const BrowsePage: React.FC = () => {
       <div className="flex items-center justify-between text-xs text-slate-400 px-1">
         <span>
           Menampilkan{' '}
-          <strong className="text-slate-200">{totalCount || items.length}</strong> serial{' '}
+          <strong className="text-slate-200">{totalCount || items.length}</strong> film & serial{' '}
           {hasActiveFilters && '(terfilter)'}
         </span>
         {totalPages > 1 && (

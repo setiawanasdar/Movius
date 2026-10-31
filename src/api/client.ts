@@ -483,21 +483,24 @@ function resolveFallback<T>(
         streaming: {
           defaultStreamUrl: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`,
           servers: [
-            { server: 'HLS VIP (PlayCDN)', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`, isActive: true },
-            { server: 'Google Cast Fast', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=cast`, isActive: false },
-            { server: 'Hydrax HD Mirror', url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=hydrax`, isActive: false },
             {
-              server: 'MultiEmbed HD',
-              url: isMovie
-                ? `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}`
-                : `https://multiembed.mov/?video_id=${encodeURIComponent(seriesSlugClean)}&s=${currentSeason}&e=${currentEp}`,
+              server: 'Server 1: HLS VIP (PlayCDN Ultra HD)',
+              url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=p2p`,
+              isActive: true,
+            },
+            {
+              server: 'Server 2: HLS Cadangan (Server Cepat)',
+              url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=backup`,
               isActive: false,
             },
             {
-              server: 'VidSrc VIP Mirror',
-              url: isMovie
-                ? `https://vidsrc.to/embed/movie/${encodeURIComponent(seriesSlugClean)}`
-                : `https://vidsrc.to/embed/tv/${encodeURIComponent(seriesSlugClean)}/${currentSeason}/${currentEp}`,
+              server: 'Server 3: HD Mirror (Stream Stabil)',
+              url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=mirror`,
+              isActive: false,
+            },
+            {
+              server: 'Server 4: Direct HD Stream (Server Ringan)',
+              url: `/api/embed?episode=${encodeURIComponent(epSlug)}&server=direct`,
               isActive: false,
             },
           ],

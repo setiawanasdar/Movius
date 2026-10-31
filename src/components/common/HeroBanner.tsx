@@ -107,7 +107,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
 
           {/* Description */}
           <p className="text-xs sm:text-sm md:text-base text-slate-300/90 line-clamp-3 leading-relaxed max-w-xl">
-            Tonton episode terbaru dari {current.title} dengan subtitle Bahasa Indonesia berkualitas tinggi, multi-server streaming tercepat, dan tanpa gangguan.
+            Tonton {current.title} dengan subtitle Bahasa Indonesia berkualitas tinggi, bagian dari <strong>4.427+ judul film & serial</strong> di Movius.
           </p>
 
           {/* Action Buttons */}

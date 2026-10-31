@@ -50,11 +50,16 @@ export const Navbar: React.FC = () => {
             <Film className="w-5 h-5 fill-white/20" />
           </div>
           <div className="flex flex-col">
-            <span className="text-xl font-black tracking-tight text-white flex items-center">
-              Mov<span className="text-rose-500">ius</span>
-            </span>
-            <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase -mt-1">
-              Sub Indo
+            <div className="flex items-center gap-1.5">
+              <span className="text-xl font-black tracking-tight text-white flex items-center">
+                Mov<span className="text-rose-500">ius</span>
+              </span>
+              <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-full bg-rose-500/15 border border-rose-500/30 text-[10px] font-black text-rose-400">
+                4.427 Judul
+              </span>
+            </div>
+            <span className="text-[9px] font-bold text-slate-400 tracking-wider uppercase -mt-0.5">
+              Koleksi Lengkap • Sub Indo
             </span>
           </div>
         </Link>

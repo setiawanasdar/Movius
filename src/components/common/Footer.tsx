@@ -18,7 +18,7 @@ export const Footer: React.FC = () => {
               </span>
             </Link>
             <p className="text-slate-400 leading-relaxed max-w-sm">
-              Platform katalog streaming serial TV, drama korea (drakor), dan film dengan subtitle Bahasa Indonesia terupdate. Menghadirkan antarmuka modern yang cepat, elegan, dan nyaman ditonton.
+              Platform katalog streaming dengan <strong>4.427+ judul film bioskop dan serial drama</strong> (Drakor, Western, Asian) dengan subtitle Bahasa Indonesia terupdate. Menghadirkan antarmuka modern yang cepat, elegan, dan nyaman ditonton.
             </p>
             <div className="flex items-center gap-3 text-[11px] text-slate-500 pt-1">
               <span className="flex items-center gap-1">

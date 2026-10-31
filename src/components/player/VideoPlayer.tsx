@@ -7,10 +7,8 @@ import {
   SkipBack,
   RotateCcw,
   ShieldCheck,
-  Tv,
   Check,
   AlertCircle,
-  ExternalLink,
   Sparkles
 } from 'lucide-react';
 import type { EpisodeStream } from '../../types/movie';
@@ -40,12 +38,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const defaultUrl = streamData.streaming?.defaultStreamUrl || (servers[0]?.url ?? '');
 
   const [activeServerUrl, setActiveServerUrl] = useState<string>(defaultUrl);
-  const [isTheaterMode, setIsTheaterMode] = useState(false);
   const [isIframeLoading, setIsIframeLoading] = useState(true);
   const [loadSlowWarning, setLoadSlowWarning] = useState(false);
-  const [autoPlayNext, setAutoPlayNext] = useState<boolean>(() => {
-    return localStorage.getItem('cinestream_autoplay') !== 'false';
-  });
 
   // Watchdog timer: If iframe is still loading after 7s, prompt server switch
   useEffect(() => {
@@ -103,12 +97,6 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => clearInterval(timer);
   }, [seriesSlug, streamData, saveProgress]);
 
-  const toggleAutoPlay = () => {
-    const nextVal = !autoPlayNext;
-    setAutoPlayNext(nextVal);
-    localStorage.setItem('cinestream_autoplay', String(nextVal));
-  };
-
   const handleFullscreen = () => {
     if (!playerContainerRef.current) return;
     if (!document.fullscreenElement) {
@@ -146,8 +134,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
     <div
       ref={playerContainerRef}
       className={cn(
-        'relative flex flex-col bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl transition-all duration-300',
-        isTheaterMode ? 'w-full max-w-none col-span-full' : 'w-full',
+        'relative flex flex-col bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl transition-all duration-300 w-full',
         className
       )}
     >
@@ -210,7 +197,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         <div className="bg-slate-900 border-b border-rose-500/30 px-4 py-2 flex items-center justify-between gap-3 text-xs text-slate-300 z-20 animate-in fade-in">
           <div className="flex items-center gap-2 text-rose-400 font-medium">
             <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
-            <span>Server memerlukan waktu lebih lama? Coba server alternatif atau buka di tab baru.</span>
+            <span>Server memerlukan waktu lebih lama? Silakan beralih ke server alternatif di bawah.</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             {servers.length > 1 && (
@@ -330,54 +317,15 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
           {/* Quick utility toggles */}
           <div className="flex items-center gap-2.5 ml-auto text-xs text-slate-400">
-            {/* Open in New Tab Button */}
-            <a
-              href={getPlayerEmbedSrc(activeServerUrl)}
-              target="_blank"
-              rel="noopener noreferrer"
-              title="Buka Video di Tab Baru (Clean Player)"
-              className="p-1.5 px-2.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer text-xs"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline font-medium">Buka di Tab Baru</span>
-            </a>
-
-            {/* Autoplay next toggle (only for Series) */}
-            {!streamData.isMovie && (
-              <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={autoPlayNext}
-                  onChange={toggleAutoPlay}
-                  className="w-3.5 h-3.5 accent-rose-600 rounded cursor-pointer"
-                />
-                <span className="hidden sm:inline text-slate-300">Auto Next</span>
-              </label>
-            )}
-
-            {/* Theater Mode Toggle */}
-            <button
-              onClick={() => setIsTheaterMode(!isTheaterMode)}
-              aria-label="Mode Bioskop"
-              title="Mode Bioskop / Theater Mode"
-              className={cn(
-                'p-1.5 rounded-lg border transition-colors cursor-pointer hidden md:flex items-center gap-1',
-                isTheaterMode
-                  ? 'bg-rose-600/20 text-rose-400 border-rose-500/40'
-                  : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
-              )}
-            >
-              <Tv className="w-4 h-4" />
-            </button>
-
             {/* Fullscreen Button */}
             <button
               onClick={handleFullscreen}
               aria-label="Layar Penuh"
               title="Layar Penuh / Fullscreen"
-              className="p-1.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors cursor-pointer"
+              className="p-1.5 px-3 rounded-lg bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-semibold"
             >
-              <Maximize2 className="w-4 h-4" />
+              <Maximize2 className="w-3.5 h-3.5 text-slate-300" />
+              <span className="hidden sm:inline">Layar Penuh</span>
             </button>
           </div>
         </div>
@@ -387,7 +335,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
       <div className="px-4 py-2 bg-slate-950/80 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-400 gap-2">
         <span className="flex items-center gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>Tips: Pemutar video telah diproteksi dari iklan pop-up dan pemblokiran koneksi. Jika server buffering, ganti pilihan server (P2P / CAST / HYDRAX) atau klik <strong>Buka di Tab Baru</strong>.</span>
+          <span>Tips: Pemutar video telah diproteksi dari iklan pop-up. Jika video mengalami kendala buffer, silakan beralih ke tombol server alternatif di atas.</span>
         </span>
       </div>
     </div>
