@@ -69,9 +69,10 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
       {/* Cinematic Gradient Overlays */}
       <div className="absolute inset-0 bg-gradient-to-t from-[#090a0f] via-[#090a0f]/80 to-transparent z-10" />
       <div className="absolute inset-0 bg-gradient-to-r from-[#090a0f] via-[#090a0f]/90 to-transparent z-10" />
+      <div className="absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[#090a0f] to-transparent z-10 pointer-events-none" />
 
       {/* Main Content Area */}
-      <div className="relative z-20 h-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col justify-end pt-24 sm:pt-28 md:pt-32 pb-10 md:pb-14">
+      <div className="relative z-20 h-full max-w-7xl mx-auto px-4 md:px-12 flex flex-col justify-end pt-28 sm:pt-32 md:pt-36 pb-10 md:pb-14">
         <div className="max-w-2xl flex flex-col gap-3.5 animate-in fade-in duration-500">
           {/* Metadata badges */}
           <div className="flex flex-wrap items-center gap-2 text-xs">
@@ -92,7 +93,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
           </div>
 
           {/* Title */}
-          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight line-clamp-2 sm:line-clamp-3 drop-shadow-lg max-h-[140px] overflow-hidden">
+          <h1 className="text-xl sm:text-3xl md:text-4xl lg:text-5xl font-black text-white tracking-tight leading-tight line-clamp-2 drop-shadow-lg max-h-[120px] overflow-hidden">
             {current.title}
           </h1>
 
@@ -109,8 +110,8 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ items, loading = false }
           <p className="text-xs sm:text-sm md:text-base text-slate-300/90 line-clamp-3 leading-relaxed max-w-xl">
             {current.synopsis || (
               current.genres?.length
-                ? `Saksikan tayangan ${current.title} (${current.year || '2026'}) dengan genre ${current.genres.join(', ')}. Nikmati streaming Full HD lengkap dengan terjemahan subtitle Bahasa Indonesia resmi.`
-                : `Saksikan tayangan sinematik ${current.title} (${current.year || '2026'}) lengkap dengan subtitle Bahasa Indonesia berkualitas tinggi.`
+                ? `Saksikan tayangan ${current.title} (${current.year || '2026'}) dengan genre ${current.genres.join(', ')}. Nikmati streaming Full HD lengkap dengan terjemahan subtitle Bahasa Indonesia.`
+                : `Saksikan tayangan ${current.title} (${current.year || '2026'}) beresolusi Full HD lengkap dengan subtitle Bahasa Indonesia.`
             )}
           </p>
 

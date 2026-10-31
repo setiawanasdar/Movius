@@ -17,34 +17,8 @@ function extractHash(urlOrHash) {
   return match ? match[1] : '';
 }
 
-// Built-in verified high-speed seeds
-const KNOWN_EPISODE_HASHES = {
-  ...HARVESTED_HASHES,
-  'doctor-x-age-white-mafia-season-1-episode-1-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/EHhKGEndUtY4WVJyiZnMaA',
-  },
-  'lament-autumn-season-1-episode-1-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/Bi7sY0ZLPaLZCJ52ZoFuIA',
-  },
-  'queen-of-tears-season-1-episode-1-2024': {
-    p2p: 'https://videonode.de/iframe3/p2p/N0j28tdsx9H6viuXvBWDMg',
-  },
-  'shogun-season-1-episode-1-2024': {
-    p2p: 'https://videonode.de/iframe3/p2p/017ovjz8vKszK8RObK6a2g',
-  },
-  'avatar-seven-havens-season-1-episode-1-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/lV7EXXPf_LGYWGakpzMQVA',
-  },
-  'spider-man-brand-new-day-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/10JeiG6WPgs0uv5ripdtKA',
-  },
-  'fragments-belonging-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/Bs-1HBdriD5lzCDAyHQx0w',
-  },
-  'hawk-season-1-episode-1-2026': {
-    p2p: 'https://videonode.de/iframe3/p2p/-8gbl6OW9JuJH-xptrjIRA',
-  },
-};
+// Built-in verified high-speed seeds from harvested hashes
+const KNOWN_EPISODE_HASHES = HARVESTED_HASHES;
 
 export default async function handler(req, res) {
   // CORS and framing headers
@@ -131,72 +105,101 @@ export default async function handler(req, res) {
 
   // 3. ACTION: Resolve Stream and Render Player
   let serverMode = String(server || 'p2p').toLowerCase();
-  if (serverMode === 'cast') serverMode = 'backup';
-  if (serverMode === 'multiembed') serverMode = 'mirror';
-  if (serverMode === 'vidsrc') serverMode = 'direct';
+  let requestedHost = 'p2p';
+  if (serverMode === 'backup' || serverMode === 'cast') {
+    requestedHost = 'cast';
+  } else if (serverMode === 'mirror' || serverMode === 'hydrax' || serverMode === 'multiembed') {
+    requestedHost = 'hydrax';
+  } else if (serverMode === 'direct' || serverMode === 'vidsrc') {
+    requestedHost = 'cast';
+  }
 
   let targetUrl = queryUrl ? decodeURIComponent(queryUrl) : '';
   const cleanEpParam = episode ? decodeURIComponent(episode).trim() : '';
 
+  // Resolve all available hashes (p2p, cast, hydrax) for this episode/slug
+  const slugFromUrl = targetUrl
+    ? targetUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/\/iframe3\/[^/]+\//, '').split('?')[0]
+    : '';
+  const slugTarget = cleanEpParam || slugFromUrl;
+  const hashes = slugTarget ? await resolveVideonodeHashesForEpisode(slugTarget) : null;
+
   // Extract hash directly if provided in queryUrl
-  let activeHash = extractHash(targetUrl);
+  let directHash = extractHash(targetUrl);
 
-  // If no direct hash, resolve from episode slug
-  if (!activeHash && cleanEpParam) {
-    const resolvedUrl = await resolveVideonodeUrlForEpisode(cleanEpParam);
-    if (resolvedUrl) {
-      activeHash = extractHash(resolvedUrl);
-      targetUrl = resolvedUrl;
+  // Pick target active host and hash
+  let activeHost = 'p2p';
+  let activeHash = '';
+
+  if (hashes) {
+    if (requestedHost === 'cast' && hashes.cast) {
+      activeHost = 'cast';
+      activeHash = hashes.cast;
+    } else if (requestedHost === 'hydrax' && hashes.hydrax) {
+      activeHost = 'hydrax';
+      activeHash = hashes.hydrax;
+    } else if (hashes.p2p) {
+      activeHost = 'p2p';
+      activeHash = hashes.p2p;
+    } else if (hashes.cast) {
+      activeHost = 'cast';
+      activeHash = hashes.cast;
+    } else if (hashes.hydrax) {
+      activeHost = 'hydrax';
+      activeHash = hashes.hydrax;
     }
   }
 
-  // If still no hash, attempt resolution with raw targetUrl
-  if (!activeHash && targetUrl) {
-    const slugFromUrl = targetUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/\/iframe3\/[^/]+\//, '').split('?')[0];
-    const resolvedUrl = await resolveVideonodeUrlForEpisode(slugFromUrl);
-    if (resolvedUrl) {
-      activeHash = extractHash(resolvedUrl);
-      targetUrl = resolvedUrl;
-    }
+  // Fallback to directly extracted hash
+  if (!activeHash && directHash) {
+    activeHash = directHash;
+    activeHost = requestedHost === 'cast' ? 'cast' : (requestedHost === 'hydrax' ? 'hydrax' : 'p2p');
   }
 
-  // If we have a genuine active videonode hash, call videonode.de API to get PlayCDN stream
+  // If we have a genuine active videonode hash, call videonode.de API for the target host
   if (activeHash) {
     try {
       const apiRes = await fetch('https://videonode.de/api.php', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Referer': `https://videonode.de/iframe3/p2p/${activeHash}`,
+          'Referer': `https://videonode.de/iframe3/${activeHost}/${activeHash}`,
           'Origin': 'https://videonode.de',
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         },
-        body: `host=p2p&id=${encodeURIComponent(activeHash)}`,
+        body: `host=${encodeURIComponent(activeHost)}&id=${encodeURIComponent(activeHash)}`,
       });
 
       if (apiRes.ok) {
         const apiData = await apiRes.json();
-        if (apiData && apiData.embedUrl && apiData.embedUrl.includes('playcdn.de')) {
-          const slug = apiData.embedUrl.replace(/^https?:\/\/[^/]+\//, '').split('?')[0];
-          const verifyRes = await fetch(`https://playcdn.de/verify/${slug}`, {
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-              'Referer': apiData.embedUrl,
-            },
-          });
+        if (apiData && apiData.embedUrl) {
+          // If Server 1 (p2p / PlayCDN), proxy m3u8 and render custom HLS player with Indonesian subtitles
+          if (activeHost === 'p2p' && apiData.embedUrl.includes('playcdn.de')) {
+            const slug = apiData.embedUrl.replace(/^https?:\/\/[^/]+\//, '').split('?')[0];
+            const verifyRes = await fetch(`https://playcdn.de/verify/${slug}`, {
+              headers: {
+                'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Referer': apiData.embedUrl,
+              },
+            });
 
-          if (verifyRes.ok) {
-            const verifyData = await verifyRes.json();
-            if (verifyData && verifyData.fileUrl) {
-              const proxiedM3u8Url = `/api/embed?action=m3u8&url=${encodeURIComponent(verifyData.fileUrl)}`;
-              res.setHeader('Content-Type', 'text/html; charset=utf-8');
-              return res
-                .status(200)
-                .send(renderCustomPlayer(proxiedM3u8Url, verifyData.title, verifyData.poster, serverMode));
+            if (verifyRes.ok) {
+              const verifyData = await verifyRes.json();
+              if (verifyData && verifyData.fileUrl) {
+                const proxiedM3u8Url = `/api/embed?action=m3u8&url=${encodeURIComponent(verifyData.fileUrl)}`;
+                res.setHeader('Content-Type', 'text/html; charset=utf-8');
+                return res
+                  .status(200)
+                  .send(renderCustomPlayer(proxiedM3u8Url, verifyData.title, verifyData.poster, serverMode));
+              }
             }
           }
+
+          // For Server 2 (Turbovip / mfw09.org) and Server 3 (Hydrax / abyssplayer.com), render isolated high-speed iframe player
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.status(200).send(renderIframePlayer(apiData.embedUrl, getServerBadgeText(serverMode)));
         }
       }
     } catch (apiErr) {
@@ -210,12 +213,12 @@ export default async function handler(req, res) {
 }
 
 /**
- * Resolves the genuine 22-character videonode streaming hash for any movie or episode
+ * Resolves the genuine 22-character videonode streaming hashes (p2p, cast, hydrax) for any movie or episode
  */
-async function resolveVideonodeUrlForEpisode(episodeSlug) {
+async function resolveVideonodeHashesForEpisode(episodeSlug) {
   if (!episodeSlug) return null;
   const cleanEp = decodeURIComponent(episodeSlug).replace(/^\//, '').trim();
-  const cacheKey = `resolved_${cleanEp}`;
+  const cacheKey = `resolved_hashes_${cleanEp}`;
   if (episodeCache.has(cacheKey)) {
     return episodeCache.get(cacheKey);
   }
@@ -245,16 +248,21 @@ async function resolveVideonodeUrlForEpisode(episodeSlug) {
     seriesBase,
   ];
 
-  // 1. Fast in-memory lookup from verified hashes
+  // 1. Fast in-memory lookup from verified harvested hashes
   for (const cand of candidates) {
     const entry = KNOWN_EPISODE_HASHES[cand];
     if (entry) {
-      const p2pUrl = entry.p2p || (typeof entry === 'string' ? entry : '');
-      const hash = extractHash(p2pUrl);
-      if (hash && isValidVideonodeHash(hash)) {
-        const fullUrl = `https://videonode.de/iframe3/p2p/${hash}`;
-        episodeCache.set(cacheKey, fullUrl);
-        return fullUrl;
+      const p2pHash = extractHash(entry.p2p || (typeof entry === 'string' ? entry : ''));
+      const castHash = extractHash(entry.cast || '');
+      const hydraxHash = extractHash(entry.hydrax || '');
+      if (p2pHash || castHash || hydraxHash) {
+        const result = {
+          p2p: p2pHash && isValidVideonodeHash(p2pHash) ? p2pHash : null,
+          cast: castHash && isValidVideonodeHash(castHash) ? castHash : null,
+          hydrax: hydraxHash && isValidVideonodeHash(hydraxHash) ? hydraxHash : null,
+        };
+        episodeCache.set(cacheKey, result);
+        return result;
       }
     }
   }
@@ -288,16 +296,24 @@ async function resolveVideonodeUrlForEpisode(episodeSlug) {
       if (!res.ok) continue;
 
       const html = await res.text();
-      // Match genuine videonode hash
-      const hashMatch =
-        html.match(/videonode\.de\/iframe3\/(?:p2p|cast|hydrax|turbovip)\/([a-zA-Z0-9_\-]{22})/i) ||
-        html.match(/data-url=["']https:\/\/videonode\.de\/iframe3\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]{22})["']/i) ||
-        html.match(/<iframe[^>]+src=["']https:\/\/videonode\.de\/iframe3\/[a-zA-Z0-9_\-]+\/([a-zA-Z0-9_\-]{22})/i);
+      const p2pMatch =
+        html.match(/videonode\.de\/iframe3\/p2p\/([a-zA-Z0-9_\-]{22})/i) ||
+        html.match(/data-url=["']https:\/\/videonode\.de\/iframe3\/p2p\/([a-zA-Z0-9_\-]{22})["']/i);
+      const castMatch =
+        html.match(/videonode\.de\/iframe3\/cast\/([a-zA-Z0-9_\-]{22})/i) ||
+        html.match(/data-url=["']https:\/\/videonode\.de\/iframe3\/cast\/([a-zA-Z0-9_\-]{22})["']/i);
+      const hydraxMatch =
+        html.match(/videonode\.de\/iframe3\/hydrax\/([a-zA-Z0-9_\-]{22})/i) ||
+        html.match(/data-url=["']https:\/\/videonode\.de\/iframe3\/hydrax\/([a-zA-Z0-9_\-]{22})["']/i);
 
-      if (hashMatch && isValidVideonodeHash(hashMatch[1])) {
-        const fullUrl = `https://videonode.de/iframe3/p2p/${hashMatch[1]}`;
-        episodeCache.set(cacheKey, fullUrl);
-        return fullUrl;
+      const p2p = p2pMatch && isValidVideonodeHash(p2pMatch[1]) ? p2pMatch[1] : null;
+      const cast = castMatch && isValidVideonodeHash(castMatch[1]) ? castMatch[1] : null;
+      const hydrax = hydraxMatch && isValidVideonodeHash(hydraxMatch[1]) ? hydraxMatch[1] : null;
+
+      if (p2p || cast || hydrax) {
+        const result = { p2p, cast, hydrax };
+        episodeCache.set(cacheKey, result);
+        return result;
       }
     } catch {
       // Continue to next URL
@@ -307,18 +323,55 @@ async function resolveVideonodeUrlForEpisode(episodeSlug) {
   return null;
 }
 
+async function resolveVideonodeUrlForEpisode(episodeSlug) {
+  const hashes = await resolveVideonodeHashesForEpisode(episodeSlug);
+  return hashes?.p2p ? `https://videonode.de/iframe3/p2p/${hashes.p2p}` : null;
+}
+
 function getServerBadgeText(mode) {
   switch (mode) {
     case 'backup':
-      return 'Server 2: HLS Cadangan (Server Cepat)';
+    case 'cast':
+      return 'Server 2: Turbovip (Fast Stream • MFW CDN)';
     case 'mirror':
-      return 'Server 3: HD Mirror (Stream Stabil)';
+    case 'hydrax':
+      return 'Server 3: Hydrax (Abyss Mirror • HD CDN)';
     case 'direct':
       return 'Server 4: Direct HD (Server Ringan)';
     case 'p2p':
     default:
-      return 'Server 1: HLS VIP (Ultra HD • Sub Indo)';
+      return 'Server 1: PlayCDN (HLS VIP • Sub Indo)';
   }
+}
+
+function renderIframePlayer(embedUrl, serverTitle) {
+  return `<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${escapeHtml(serverTitle)}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    #video-frame { width: 100%; height: 100%; border: 0; background: #000; display: block; }
+    .status-badge { position: absolute; top: 12px; left: 12px; z-index: 5; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(16, 185, 129, 0.5); color: #a7f3d0; font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 8px; backdrop-filter: blur(8px); display: flex; align-items: center; gap: 7px; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,0.6); }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 8px #10b981; }
+  </style>
+</head>
+<body>
+  <div class="status-badge">
+    <div class="status-dot"></div>
+    <span>${escapeHtml(serverTitle)}</span>
+  </div>
+  <iframe
+    id="video-frame"
+    src="${escapeHtml(embedUrl)}"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+    allowfullscreen
+  ></iframe>
+</body>
+</html>`;
 }
 
 function renderCustomPlayer(proxiedM3u8Url, title = 'Video Player', poster = '', serverMode = 'p2p') {
