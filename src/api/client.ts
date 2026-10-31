@@ -34,6 +34,8 @@ const allCatalogItemsMap = new Map<string, CatalogItem>();
   ...(FALLBACK_DATA.drakor?.items || []),
   ...(FALLBACK_DATA.ongoing?.items || []),
   ...(FALLBACK_DATA.completed?.items || []),
+  ...(FALLBACK_DATA.asian?.items || []),
+  ...(FALLBACK_DATA.west?.items || []),
 ].forEach((item) => {
   if (item && item.slug) {
     allCatalogItemsMap.set(item.slug, item as CatalogItem);
@@ -172,6 +174,33 @@ export async function apiClient<T>(
 }
 
 /**
+ * Helper to paginate and deduplicate catalog items cleanly
+ */
+function paginateCatalogList<T>(items: CatalogItem[], page: string | number = 1, perPage = 24): T {
+  const parsedPage = Math.max(1, typeof page === 'number' ? page : parseInt(String(page), 10) || 1);
+  const seen = new Set<string>();
+  const uniqueItems = items.filter((item) => {
+    if (!item?.slug || seen.has(item.slug)) return false;
+    seen.add(item.slug);
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(uniqueItems.length / perPage));
+  const currentPage = Math.min(parsedPage, totalPages);
+  const startIndex = (currentPage - 1) * perPage;
+  const paged = uniqueItems.slice(startIndex, startIndex + perPage);
+
+  return {
+    success: true,
+    page: currentPage,
+    totalPages,
+    count: paged.length,
+    totalCount: uniqueItems.length,
+    items: paged,
+  } as unknown as T;
+}
+
+/**
  * Resolves comprehensive static snapshot data when remote API encounters
  * Cloudflare 403 blocks, downtime, or network latency.
  */
@@ -180,68 +209,41 @@ function resolveFallback<T>(
   params?: Record<string, string | number | undefined>,
   fallbackKey?: string
 ): T | null {
+  const page = params?.page ? parseInt(String(params.page), 10) : 1;
+
   // 1. Rilis Terbaru
   if (endpoint.includes('/latest')) {
-    return FALLBACK_DATA.latest as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.latest.items as CatalogItem[], page);
   }
 
   // 2. Populer / Top
   if (endpoint.includes('/popular')) {
-    return FALLBACK_DATA.popular as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.popular.items as CatalogItem[], page);
   }
 
   // 3. Drama Korea
   if (endpoint.includes('/drakor')) {
-    return FALLBACK_DATA.drakor as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.drakor.items as CatalogItem[], page);
   }
 
   // 4. Ongoing Series
   if (endpoint.includes('/ongoing')) {
-    return FALLBACK_DATA.ongoing as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.ongoing.items as CatalogItem[], page);
   }
 
   // 5. Completed / Tamat
   if (endpoint.includes('/completed')) {
-    return FALLBACK_DATA.completed as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.completed.items as CatalogItem[], page);
   }
 
   // 6. Asian Series
   if (endpoint.includes('/asian')) {
-    const asianItems = allCatalogItems.filter((i) =>
-      ['drakor', 'korea', 'china', 'japan', 'asia'].some(
-        (k) =>
-          i.title.toLowerCase().includes(k) ||
-          i.slug.toLowerCase().includes(k) ||
-          i.genres.some((g) => g.toLowerCase().includes(k))
-      )
-    );
-    const list = asianItems.length > 0 ? asianItems : FALLBACK_DATA.drakor.items;
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: list.length,
-      items: list,
-    } as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.asian.items as CatalogItem[], page);
   }
 
   // 7. Western Series
   if (endpoint.includes('/west')) {
-    const westItems = allCatalogItems.filter(
-      (i) =>
-        i.genres.includes('Action') ||
-        i.genres.includes('Sci-Fi') ||
-        i.title.includes('Avatar') ||
-        i.title.includes('Doctor')
-    );
-    const list = westItems.length > 0 ? westItems : FALLBACK_DATA.popular.items;
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: list.length,
-      items: list,
-    } as unknown as T;
+    return paginateCatalogList<T>(FALLBACK_DATA.west.items as CatalogItem[], page);
   }
 
   // 8. Filter Genre
@@ -250,14 +252,8 @@ function resolveFallback<T>(
     const matched = allCatalogItems.filter((item) =>
       item.genres?.some((g) => g.toLowerCase().includes(genreSlug))
     );
-    const items = matched.length > 0 ? matched : allCatalogItems.slice(0, 18);
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: items.length,
-      items,
-    } as unknown as T;
+    const list = matched.length > 0 ? matched : allCatalogItems;
+    return paginateCatalogList<T>(list, page);
   }
 
   // 9. Filter Negara
@@ -266,19 +262,13 @@ function resolveFallback<T>(
     let matched: CatalogItem[] = [];
     if (countrySlug.includes('korea')) {
       matched = (FALLBACK_DATA.drakor.items as CatalogItem[]) || [];
-    } else if (countrySlug.includes('usa') || countrySlug.includes('uk')) {
-      matched = allCatalogItems.filter((i) => i.genres.includes('Action') || i.genres.includes('Sci-Fi'));
+    } else if (countrySlug.includes('usa') || countrySlug.includes('uk') || countrySlug.includes('united-states')) {
+      matched = (FALLBACK_DATA.west.items as CatalogItem[]) || [];
     } else {
       matched = allCatalogItems.filter((i) => i.genres.includes('Drama'));
     }
-    const items = matched.length > 0 ? matched : allCatalogItems.slice(0, 18);
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: items.length,
-      items,
-    } as unknown as T;
+    const list = matched.length > 0 ? matched : allCatalogItems;
+    return paginateCatalogList<T>(list, page);
   }
 
   // 10. Filter Tahun
@@ -286,14 +276,8 @@ function resolveFallback<T>(
     const yearStr = endpoint.split('/year/')[1]?.split('?')[0] || '2026';
     const yearNum = parseInt(yearStr, 10);
     const matched = allCatalogItems.filter((item) => item.year === yearNum);
-    const items = matched.length > 0 ? matched : allCatalogItems.slice(0, 18);
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: items.length,
-      items,
-    } as unknown as T;
+    const list = matched.length > 0 ? matched : allCatalogItems;
+    return paginateCatalogList<T>(list, page);
   }
 
   // 11. Genres & Countries metadata
@@ -321,13 +305,7 @@ function resolveFallback<T>(
         )
       : allCatalogItems;
 
-    return {
-      success: true,
-      page: 1,
-      totalPages: 1,
-      count: matched.length,
-      items: matched,
-    } as unknown as T;
+    return paginateCatalogList<T>(matched, page);
   }
 
   // 13. Detail Series

@@ -39,11 +39,55 @@ export const HomePage: React.FC = () => {
           movieApi.getGenres(),
         ]);
 
-      if (popRes.status === 'fulfilled') setPopularItems(popRes.value.items || []);
-      if (latestRes.status === 'fulfilled') setLatestItems(latestRes.value.items || []);
-      if (drakorRes.status === 'fulfilled') setDrakorItems(drakorRes.value.items || []);
-      if (ongoingRes.status === 'fulfilled') setOngoingItems(ongoingRes.value.items || []);
-      if (completedRes.status === 'fulfilled') setCompletedItems(completedRes.value.items || []);
+      const rawPop = popRes.status === 'fulfilled' ? popRes.value.items || [] : [];
+      const rawDrakor = drakorRes.status === 'fulfilled' ? drakorRes.value.items || [] : [];
+      const rawLatest = latestRes.status === 'fulfilled' ? latestRes.value.items || [] : [];
+      const rawOngoing = ongoingRes.status === 'fulfilled' ? ongoingRes.value.items || [] : [];
+      const rawCompleted = completedRes.status === 'fulfilled' ? completedRes.value.items || [] : [];
+
+      // Smart zero-duplicate filtering across home rows
+      const shownSlugs = new Set<string>();
+
+      // 1. Popular row gets first pick
+      const distinctPopular = rawPop.filter((i) => {
+        if (!i.slug || shownSlugs.has(i.slug)) return false;
+        shownSlugs.add(i.slug);
+        return true;
+      });
+      setPopularItems(distinctPopular.length > 0 ? distinctPopular : rawPop);
+
+      // 2. Korean Drama spotlight
+      const distinctDrakor = rawDrakor.filter((i) => {
+        if (!i.slug || shownSlugs.has(i.slug)) return false;
+        shownSlugs.add(i.slug);
+        return true;
+      });
+      setDrakorItems(distinctDrakor.length > 0 ? distinctDrakor : rawDrakor);
+
+      // 3. Latest releases (fresh titles not seen above)
+      const distinctLatest = rawLatest.filter((i) => {
+        if (!i.slug || shownSlugs.has(i.slug)) return false;
+        shownSlugs.add(i.slug);
+        return true;
+      });
+      setLatestItems(distinctLatest.length > 0 ? distinctLatest : rawLatest);
+
+      // 4. Ongoing series
+      const distinctOngoing = rawOngoing.filter((i) => {
+        if (!i.slug || shownSlugs.has(i.slug)) return false;
+        shownSlugs.add(i.slug);
+        return true;
+      });
+      setOngoingItems(distinctOngoing.length > 0 ? distinctOngoing : rawOngoing);
+
+      // 5. Completed series
+      const distinctCompleted = rawCompleted.filter((i) => {
+        if (!i.slug || shownSlugs.has(i.slug)) return false;
+        shownSlugs.add(i.slug);
+        return true;
+      });
+      setCompletedItems(distinctCompleted.length > 0 ? distinctCompleted : rawCompleted);
+
       if (genreList.status === 'fulfilled') setGenres(genreList.value || []);
 
       // If all failed, trigger error state
